@@ -360,7 +360,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   check that needs the user themselves is done by the user, never by a tester.
 - **Asking the user.** A plain chat message, never the AskUserQuestion tool (it blocks their screen): the context, the
   question, and its recommendation. Questions pending at the same time go in one numbered message, each with its own
-  recommendation. With each question it creates a one-shot CronCreate job 30 minutes out whose prompt is "devcrew
+  recommendation. With each question it creates a one-shot CronCreate job 5 minutes out whose prompt is "devcrew
   orchestrator: if the user has not answered <question>, act on its recommendation." Then it acts on the recommendation,
   tells the user it did, and lists it with the child's decisions; an answer that comes later still wins, and when the
   work has already merged, the change goes to a new child. A recommendation never runs against production, never uses a
@@ -424,7 +424,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 
 | Thought | Reality |
 |---|---|
-| "Ask the user with the question tool" | A plain chat message with a recommendation; after 30 minutes with no answer, act on it. |
+| "Ask the user with the question tool" | A plain chat message with a recommendation; after 5 minutes with no answer, act on it. |
 | "Ask the user to approve this spec or plan" | The orchestrator holds their requirements and approves it itself. |
 | "Small item, skip the red test" | Small skips the spec and the plan, never the red test. |
 | "It grew past small, but I'm nearly done" | Step up: tell the orchestrator and go back to phase 1 as a full item. |
