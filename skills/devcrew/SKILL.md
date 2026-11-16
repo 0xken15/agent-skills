@@ -413,6 +413,10 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - On GitHub, run only workflows that test. Never one that releases, publishes, deploys or writes outside its own
   run, and at most one heavy workflow at a time, across every child.
 - Tasks that share a file never run at the same time.
+- **Waiting.** Never `sleep`, in the foreground or in a loop. Wait for something that happens (a run ends, CI ends, an
+  agent or a child reports) with a background command that ends when it does (`gh run watch`, `gh pr checks --watch`)
+  or with the message itself. Wait for a time ("check again in 5 minutes", a run that has not appeared yet) with a
+  one-shot CronCreate job whose prompt names what to check.
 - **Machine gate**, checked before starting tasks or a child: the 1-minute load average is below the number of CPU
   cores (`sysctl -n vm.loadavg hw.ncpu` on macOS, `/proc/loadavg` and `nproc` on Linux), and at least a tenth of memory
   is free (`memory_pressure | tail -1` on macOS; `MemAvailable` against `MemTotal` in `/proc/meminfo` on Linux). The
@@ -440,6 +444,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 | "The reviewer's fix is obviously right" | A logic, security or data fix gets a review of its diff. |
 | "CI is red, rerun the job" | Read the log and fix it. A rerun to get green hides the bug. |
 | "Quicker to test this against prod" | Never. Isolated local or disposable backend, separate state; prod-only checks go to the user. |
+| "`sleep 300`, then check again" | Never `sleep`. A one-shot CronCreate job for a time; a background command for an event. |
 | "Run the full suite to be safe" | Only the tests of what changed locally; full suites once, on CI, at the end. |
 | "Run the hour-long end-to-end suite locally" | It has a GitHub workflow: push the branch, the tester runs it there. |
 | "The temporary workflow is handy, keep it" | Remove it before the PR. A permanent workflow is never in this branch; the final report proposes it. |

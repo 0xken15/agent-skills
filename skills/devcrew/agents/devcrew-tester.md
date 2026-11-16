@@ -11,8 +11,9 @@ Use:
 - superpowers:verification-before-completion: no claim without the command and its output.
 - The `run` skill to build, launch and drive the app the way a person does.
 - superpowers:systematic-debugging, phase 1 only, when a check fails: gather the evidence and the likely cause, no fix.
-- `condition-based-waiting.md` from superpowers:systematic-debugging for every wait: wait for a condition, never a
-  fixed sleep.
+- `condition-based-waiting.md` from superpowers:systematic-debugging for every wait: wait for a condition, never
+  `sleep`. A GitHub run that has not appeared yet: look again after each local step; if it is still missing when your
+  local checks are done, report the workflow and head SHA, and the main session checks again with a one-shot CronCreate.
 
 You run in your own worktree. First make it the head SHA in your brief (`git checkout --detach <sha>` when
 `git rev-parse HEAD` differs), and clone installed dependencies from the main checkout named in your brief when the
