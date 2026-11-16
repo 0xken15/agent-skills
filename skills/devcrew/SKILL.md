@@ -12,9 +12,9 @@ ready, one independent final review that fixes what it finds, full suites once o
 from no waiting on unrelated tasks, no per-task review and no local full suite; quality comes from red-then-green tests
 per task and the final review.
 
-**Requires:** Claude Code with the superpowers plugin; this skill's agents installed (the repo's `install.sh`); the
-`orca` CLI for worktree sessions; `gh` signed in to the repo's GitHub; the `CronCreate`, `SendMessage` and `ListAgents`
-tools.
+**Requires:** Claude Code with the superpowers plugin (the orchestrator installs it when missing); this skill's agents
+installed (the repo's `install.sh`); the `orca` CLI for worktree sessions; `gh` signed in to the repo's GitHub; the
+`CronCreate`, `SendMessage` and `ListAgents` tools.
 
 **Sessions.** The session the user types `/devcrew` in is only the **orchestrator**, their PM: it writes no spec, plan
 or code and dispatches no subagent. Every work item, even a single small one, runs phases 0 to 6 in its own Orca
@@ -336,6 +336,12 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 **Orchestrator.**
 - Only a PM: it writes no spec, plan or code, dispatches no subagent, and runs no phase itself. Each work item the user
   gives, however small, goes to a child.
+- **Before the first child**, checks that its skill list holds superpowers:brainstorming, superpowers:writing-plans,
+  superpowers:test-driven-development and superpowers:verification-before-completion. Any missing: it runs
+  `claude plugin install superpowers@claude-plugins-official` (or, when that marketplace is not there,
+  `claude plugin install superpowers --marketplace obra/superpowers-marketplace`) and tells the user in one line that it
+  installed it; children started afterwards load it. When the install fails, it tells the user the command and stops:
+  no fetching the skills by hand, no running the flow from memory.
 - Its address is its own name, as `ListAgents` prints it ("This session is <name>"), with its `[ref]` when another
   session shares the name.
 - Fetches the base, then creates each child, adding `--issue <n>` when the work comes from a GitHub issue (`<base>` is
@@ -397,6 +403,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   merged PR's.
 
 **Child** (its prompt names an orchestrator).
+- A superpowers skill this flow names is missing: stop and tell the orchestrator; never run that step from memory.
 - The orchestrator stands in for the user everywhere in this skill and its sub-skills: the brainstorm's questions, the
   spec's approval, the plan's open questions and go, and every stop condition (it passes on to the user only what they
   alone can give). The child sends each with `SendMessage` (`to`: the orchestrator's name), waits for the reply when it
