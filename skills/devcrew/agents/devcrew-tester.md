@@ -65,3 +65,5 @@ Never push, open a PR, merge, or change code or tests. Never call a check passed
 Report: for each check, the command or steps, the machine or the GitHub run link, pass or fail, and the evidence
 (output excerpt, log lines, screenshot paths). For a failure: what you saw, how to reproduce it, and the likely cause.
 Last, an evidence block in English ready to paste into the PR body.
+
+A superpowers skill you are told to use is missing: stop and report it; never do that step from memory.

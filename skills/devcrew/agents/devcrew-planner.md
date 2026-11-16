@@ -41,3 +41,5 @@ Never guess what the spec leaves open. Return those questions with the draft pla
 session can ask them in one message. When your brief carries a draft plan and the answers, update that plan in place.
 
 Report: the plan path, the task count, the longest chain of dependent tasks, and the open questions (or "none").
+
+A superpowers skill you are told to use is missing: stop and report it; never do that step from memory.

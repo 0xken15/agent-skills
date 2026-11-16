@@ -30,3 +30,5 @@ Rules:
 
 Report: the branch, the commit SHAs in order (red, then green), the test command and its result, and anything you
 could not do.
+
+A superpowers skill you are told to use is missing: stop and report it; never do that step from memory.

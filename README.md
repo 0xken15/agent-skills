@@ -15,7 +15,8 @@ cd agent-skills
 ```
 
 `install.sh` links each `skills/<name>/` into `~/.claude/skills/` and each `skills/<name>/agents/*.md` into
-`~/.claude/agents/`, so a `git pull` updates them. It never overwrites a file that is not one of its links.
+`~/.claude/agents/` (or under `$CLAUDE_CONFIG_DIR` when set; run it once per config dir you use), so a `git pull`
+updates them. It never overwrites a file that is not one of its links.
 
 devcrew also needs the [superpowers](https://github.com/obra/superpowers) plugin (it installs it on first run when
 missing), the `gh` CLI, and the `orca` CLI for its worktree sessions.
