@@ -6,12 +6,20 @@ repo="$(cd "$(dirname "$0")" && pwd)"
 home="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 mkdir -p "$home/skills" "$home/agents"
 
+# A link into this repo whose target is gone (a renamed or removed skill or agent) is ours to remove.
+for dst in "$home"/skills/* "$home"/agents/*; do
+  if [ -L "$dst" ] && [ ! -e "$dst" ] && [[ "$(readlink "$dst")" == "$repo"/* ]]; then
+    rm "$dst"
+    echo "removed stale $dst"
+  fi
+done
+
 link() {
   local src="$1" dst="$2"
-  if [ -L "$dst" ]; then
+  if [ -L "$dst" ] && [[ "$(readlink "$dst")" == "$repo"/* ]]; then
     rm "$dst"
-  elif [ -e "$dst" ]; then
-    echo "skip: $dst exists and is not a link; move it away and rerun" >&2
+  elif [ -e "$dst" ] || [ -L "$dst" ]; then
+    echo "skip: $dst exists and is not one of this repo's links; move it away and rerun" >&2
     return
   fi
   ln -s "$src" "$dst"

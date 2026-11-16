@@ -12,6 +12,10 @@ ready, one independent final review that fixes what it finds, full suites once o
 from no waiting on unrelated tasks, no per-task review and no local full suite; quality comes from red-then-green tests
 per task and the final review.
 
+**Requires:** Claude Code with the superpowers plugin; this skill's agents installed (the repo's `install.sh`); the
+`orca` CLI for worktree sessions; `gh` signed in to the repo's GitHub; the `CronCreate`, `SendMessage` and `ListAgents`
+tools.
+
 **Sessions.** The session the user types `/devcrew` in is only the **orchestrator**, their PM: it writes no spec, plan
 or code and dispatches no subagent. Every work item, even a single small one, runs phases 0 to 6 in its own Orca
 worktree and session, a **child**; everywhere below, "the main session" is that child's session and "the main checkout"
@@ -19,8 +23,7 @@ its Orca worktree (see Orchestrator and children).
 
 **Language.**
 - The user's language (the one they write in): everything said to the user and every message between the orchestrator
-  and a child (questions, status
-  lines, the 30-minute reports, the final report).
+  and a child (questions, status lines, the 30-minute reports, the final report).
 - English: everything written outside this chat: docs (the spec, the plan), code and comments, commits, and
   everything on GitHub (PR title and body, PR and issue comments, labels) or any other outside service.
 
@@ -36,9 +39,9 @@ its Orca worktree (see Orchestrator and children).
 | End-to-end and required local checks: the tester | Opus |
 | Sonnet, Haiku | Never |
 
-Always the newest version of Opus and Fable (today Opus 5.5 and Fable 5.2; the `opus` and `fable` aliases resolve to
-the newest). The main session writes no code, so its context stays small for the whole run: every code change,
-including a CI fix or a rebase, goes to a `devcrew-implementer`.
+Always the newest version of Opus and Fable (the `opus` and `fable` aliases resolve to the newest). The main session
+writes no code, so its context stays small for the whole run: every code change, including a CI fix or a rebase, goes to
+a `devcrew-implementer`.
 
 Every dispatch passes an `effort` matched to its work, never below `medium`:
 
@@ -54,7 +57,7 @@ orchestrator made.
 
 ## Team
 
-Every subagent is a named agent from `~/.claude/agents/`, dispatched with `subagent_type`. Its definition carries the
+Every subagent is a named agent installed with this skill, dispatched with `subagent_type`. Its definition carries the
 model and the standing rules (TDD, tests of what changed only, no push, what to report), so the brief carries only
 the task. Never pass `model`, except `model: "fable"` for a hard plan (phase 2); always pass `effort` from the table
 above.
@@ -73,8 +76,8 @@ Every dispatch's `description` starts with its place in the run, so the running 
 | Final review (small diff); one area of a large diff; fixes of that area's findings; fix-diff review | `P4 review`; `P4 review <area>`; `P4 review-fix <area>` (`P4 review-fix seams` for findings across areas); `P4 fix-review` |
 | Removing the temporary workflow | `P4 tmp-wf-remove` |
 | Tester of one check group; fix of a failed check; rerun | `P4 e2e <group>`; `P4 e2e-fix#1`; `P4 e2e-rerun#1 <group>` |
-| CI fix; tester rerun after it | `P5 ci-fix#1`; `P5 e2e-rerun#1` |
-| Rebase (phase 4, 5 or 6); tester rerun after it | `P4 rebase#1`, `P5 rebase#1` or `P6 rebase#1`; `P4 e2e-rerun#1` (same phase) |
+| CI fix; tester rerun after it | `P5 ci-fix#1`; `P5 e2e-rerun#1 <group>` |
+| Rebase (phase 4, 5 or 6); tester rerun after it | `P4 rebase#1`, `P5 rebase#1` or `P6 rebase#1`; `P4 e2e-rerun#1 <group>` (same phase) |
 
 `#n` counts up per label: the second CI fix is `P5 ci-fix#2`.
 
@@ -97,7 +100,7 @@ Every dispatch's `description` starts with its place in the run, so the running 
 
 **Size.** The orchestrator sizes each item when it creates the child and writes `Size: small` or `Size: full` in its
 prompt. Small only when every one of these holds; otherwise full:
-- the request says what to do, with no product question open;
+- the request says what to do, with no product question open that the orchestrator cannot settle from it;
 - one component, about 3 code files or fewer and under about 150 changed lines, tests not counted;
 - nothing new stored, synced or exposed; no auth or security; no migration; no new screen;
 - no new end-to-end check.
@@ -135,12 +138,10 @@ the spec.
 **2. Plan.** The plan is **hard** when the spec touches two or more components; stores, syncs or exposes data; touches
 security, migration or concurrency; or, by the spec's own estimate, needs six tasks or more. A hard plan's dispatch
 passes `model: "fable"` and `effort: "xhigh"`; any other plan, and every update after the orchestrator's answers (even
-of a hard plan), uses the planner's own Opus and `high`. The status line for phase 2 names which and why.
-A `devcrew-planner` subagent reads the plan skill with
-`curl -sL https://raw.githubusercontent.com/obra/superpowers/main/skills/writing-plans/SKILL.md` and follows it. Where
-it names an execution skill (the plan header and its handoff), it names devcrew phase 3 instead. If the fetch fails,
-it uses the installed superpowers:writing-plans. It saves the plan at the docs path and commits nothing. Every task
-names:
+of a hard plan), uses the planner's own Opus and `high`. The status line for phase 2 names which and why. A
+`devcrew-planner` subagent follows the installed superpowers:writing-plans skill. Where it names an execution skill (the
+plan header and its handoff), it names devcrew phase 3 instead. It saves the plan at the docs path and commits nothing.
+Every task names:
 - the files it may touch, tests included;
 - the test that must fail before the change (a task that changes no behavior, such as docs, copy or a temporary
   workflow, has none and is one commit);
@@ -148,10 +149,10 @@ names:
 - its effort, from the table above.
 
 The plan ends with a **Verification** section: each end-to-end check the feature needs (what to build and run, on which
-machine or box, against which isolated local or disposable backend, what a person should see, and the repo workflow that
-runs it on GitHub when one exists), or "none" with the reason. End-to-end runs never touch production: no production
-backend, database, secrets or real accounts, and never the services or apps the user is using; the tester's definition
-holds the isolation rules.
+machine or device, against which isolated local or disposable backend, what a person should see, and the repo workflow
+that runs it on GitHub when one exists), or "none" with the reason. End-to-end runs never touch production: no
+production backend, database, secrets or real accounts, and never the services or apps the user is using; the tester's
+definition holds the isolation rules.
 
 A long check with no workflow to run it on GitHub gets a **temporary workflow**: a task adds
 `.github/workflows/tmp-<topic>.yml`, triggered only by `push` to the feature branch (`workflow_dispatch` cannot start a
@@ -225,18 +226,19 @@ Long checks run on GitHub, not on the user's machine: a check the repo can run b
 workflow; the rest run locally at the same time. The tester's definition holds the rules.
 
 **CI runs beside the testers.** Before they start, the main session opens the pull request as phase 5 says (fetch,
-rebase if it conflicts, push, ready PR with `hold`), so CI's full suites and the testers run at the same time. When
-fixes land it pushes once no other fix is still running, then the reruns start; every brief carries the pushed head SHA.
-A temporary workflow holds the PR back: push the branch alone and open the PR once the file is removed, unless a plain
-branch push already starts the repo's CI, in which case open it now. A CI failure while the testers run is handled as
-phase 5 says.
+rebase if it conflicts, push, ready PR, with the `hold` label when the repo uses one), so CI's full suites and the
+testers run at the same time. When fixes land it pushes once no other fix is still running, then the reruns start; every
+brief carries the pushed head SHA. A temporary workflow holds the PR back: push the branch alone and open the PR once
+the file is removed, unless a plain branch push already starts the repo's CI, in which case open it now. A CI failure
+while the testers run is handled as phase 5 says.
 
-From here on, every fix (a tester failure, a CI failure, a fix across review areas) goes to a `devcrew-implementer` in
+From here on, every fix (a tester failure, a CI failure) goes to a `devcrew-implementer` in
 its own worktree and lands as in phase 3, so fixes that arrive together never share a checkout; two fixes that touch
-the same file run one after the other. A rebase is the exception: it runs in the main checkout, with no fix running.
+the same file run one after the other. A rebase is the exception: it runs in the main checkout (dispatched without
+`isolation`), with no fix running.
 
 The main session splits the checks into **groups** that can run apart, one `devcrew-tester` per group, all at once:
-- one group per machine or device (this Mac, a test PC, a phone, a box);
+- one group per machine or device (this machine, another computer, a phone, a VM);
 - every check run on GitHub in one group, so its heavy workflows go one at a time;
 - checks that share a build stay in one group, so nothing is built twice.
 
@@ -245,12 +247,13 @@ gate; a shared machine or device holds one tester at a time. Each brief names it
 name as its isolation slot, so no two testers share a port, a state directory, a test account or a backend. Each
 tester runs in its own worktree (`isolation: "worktree"`) at the head SHA in its brief, and the brief carries the main
 checkout's path to clone dependencies from, so fixes landing and a rebase never change the code under a running check.
+When a tester reports, the main session removes its worktree.
 
 A failure goes to a `devcrew-implementer` with that tester's evidence; then a fresh tester for that group reruns only
-the failed checks, plus any passed check in another group whose area the fix touched (a check's area: the components
-it builds or runs). A check still running on an older head finishes; it reruns only when a fix since then touched its
-area. The other receipts stand. The main session puts every group's receipts in the PR body (`gh pr edit`) before
-removing `hold`.
+the failed checks, plus any passed check in another group whose area the fix touched (a check's area: the components it
+builds or runs). A check still running on an older head finishes; it reruns only when a fix since then touched its area.
+The other groups' evidence stands. The main session puts every group's evidence in the PR body (`gh pr edit`) before the
+merge.
 
 A temporary workflow runs on each of those pushes. Once every group passes, a `devcrew-implementer` removes the
 file in one commit (`effort: "medium"`), and the main session checks `git diff <base>...HEAD -- .github/workflows/`
@@ -260,18 +263,18 @@ runs locally.
 **5. Full suites on CI.** Usually the PR is open since the testers started (phase 4). If not (no testers, or a temporary
 workflow held it back), open it now: fetch the base first; if the branch conflicts with it, rebase (below) before the
 push, since CI does not start on a conflicting PR. Push the branch and open the pull request, ready rather than draft
-where CI skips drafts, with the `hold` label (created if the repo has none) while CI runs. CI runs the full suites once
-per pushed head; wait for the current head's run with `gh pr checks <PR> --watch` as a background command, which
-notifies the main session when CI ends. On a failure: read the log, a `devcrew-implementer` fixes every failure from
-that run (a behavior fix with a red then green test), then one push; a tester fix and a CI fix that land together go in
-the same push. A fix in a receipt's area: a tester for that check's group reruns it once. Never rerun a job to get it
-green.
+where CI skips drafts, with the `hold` label while CI runs when the repo uses one. CI runs the full suites once per
+pushed head; wait for the current head's run with `gh pr checks <PR> --watch` as a background command, which notifies
+the main session when CI ends. On a failure: read the log, a `devcrew-implementer` fixes every failure from that run (a
+behavior fix with a red then green test), then one push; a tester fix and a CI fix that land together go in the same
+push. A fix in the area of a check that passed: a tester for that check's group reruns it once. Never rerun a job to get
+it green.
 
-**6. Merge on green.** Never with a `tmp-` workflow in the diff. When the required checks pass on the head, every
-tester group has passed, and GitHub shows the PR mergeable with no conflict, remove `hold` and merge at once, even if
+**6. Merge on green.** Never with a `tmp-` workflow in the diff. When the required checks pass on the head, every tester
+group has passed, and GitHub shows the PR mergeable with no conflict, remove `hold` (if set) and merge at once, even if
 the base moved, with the merge command the repo's docs name, or else
-`gh pr merge <PR> --squash --admin --match-head-commit <head>`. No new validation round. Release and
-deploy only when the user asks.
+`gh pr merge <PR> --squash --match-head-commit <head>` (`--admin` only when the repo's docs call for it). No new
+validation round. Release and deploy only when the user asks.
 
 **Rebase.** Whenever the branch conflicts with the base (another feature merged first), from phase 4 on, rebase
 instead of stopping:
@@ -279,23 +282,23 @@ instead of stopping:
    conflict keeping the intent of both sides, and runs the tests of what the branch changed plus the tests of every
    conflicted file. It does not push.
 2. The main session checks `git log` still shows each red commit before its code commit, then pushes once with
-   `git push --force-with-lease`; the new head's automatic CI is the run to wait for (phase 5 rules apply). A receipt
-   whose area a conflict touched: a tester for that check's group reruns it once.
+   `git push --force-with-lease`; the new head's automatic CI is the run to wait for (phase 5 rules apply). A passed
+   check whose area a conflict touched: a tester for that check's group reruns it once.
 3. Green and mergeable: merge as above with the new head.
 
 When the work comes from a GitHub issue, the child comments on it (English, detailed enough for its reporter): when work
-starts, with the PR link once the PR is up, with the merged PR when done, and with the version once a release carries
-it.
+starts, with the PR link once the PR is up, and with the merged PR when done. The orchestrator adds the version once a
+release carries it, since the child is gone by then.
 
-Final report: what changed, the tests and receipts, the review findings and their fixes, the CI result, the PR link and
-the merge, and the time each part took: brainstorm and spec, plan, implementation, review, testers, CI, merge, and apart
-from them the time spent waiting for the user. To have it, the main session posts a status line in its own chat with the
-UTC time (`date -u +%H:%M`) when each phase starts and when it starts and stops waiting for an answer.
+Final report: what changed, the tests and the testers' evidence, the review findings and their fixes, the CI result, the
+PR link and the merge, and the time each part took: brainstorm and spec, plan, implementation, review, testers, CI,
+merge, and apart from them the time spent waiting for the user. To have it, the main session posts a status line in its
+own chat with the UTC time (`date -u +%H:%M`) when each phase starts and when it starts and stops waiting for an answer.
 
 ## Run without stopping
 
 The orchestrator's go on the plan (a small item's design) covers phases 3 to 6. From then on, run every task, the
-review, the receipts, CI and the merge through to the report without asking to continue. When a task lands, post one
+review, the testers, CI and the merge through to the report without asking to continue. When a task lands, post one
 status line (task done, tests green, what started) and go on.
 
 About every 30 minutes (full items only), send a progress report to the orchestrator. At the start of phase 3, create a
@@ -361,29 +364,31 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - **Asking the user.** A plain chat message, never the AskUserQuestion tool (it blocks their screen): the context, the
   question, and its recommendation. Questions pending at the same time go in one numbered message, each with its own
   recommendation. With each question it creates a one-shot CronCreate job 5 minutes out whose prompt is "devcrew
-  orchestrator: if the user has not answered <question>, act on its recommendation." Then it acts on the recommendation,
+  orchestrator: if the user has not answered <question>, act on its recommendation."; an answer deletes that job
+  (CronDelete). When it fires, the orchestrator acts on the recommendation,
   tells the user it did, and lists it with the child's decisions; an answer that comes later still wins, and when the
   work has already merged, the change goes to a new child. A recommendation never runs against production, never uses a
   secret or access the user has not given, and never merges before phase 6's conditions hold. For a missing check it
   recommends holding the merge; for a part of the work, leaving it out of this branch; after two failed rounds, holding
-  the merge for one more round with fresh evidence.
+  the merge for one more round with fresh evidence. A merge held for the user is asked again on each board run.
 - Relays to the user at once, in the user's language and in a few lines: a question only they can answer, a blocker, a
-  PR link, a merge and a final report. The rest (phase starts, progress reports) goes in the **board**: while any child
-  runs, a CronCreate job (`10,40 * * * *`, just after the children's reports) whose prompt is "devcrew orchestrator:
-  post the board, check on silent children, start the backlog items the gate held back, then wait." posts one line per
-  child from its latest message (phase, tasks done out of the total, testers and CI, blocker). Create it with the first
-  child; delete it once no child runs and the backlog is empty.
-- Does not read the children's screens. After each message to a child it sends with `notify_when_idle: true`. A child is
-  idle while it waits on its agents or CI, so an idle notice, or a board run, finds it stopped only when that child has
-  sent nothing for 30 minutes: one `SendMessage` asks where it stands, `orca terminal read` only when that gets no
-  answer, then it resumes the child or tells the user.
+  PR link, a merge, a final report, and each child it starts (item, size, branch). The rest (phase starts, progress
+  reports) goes in the **board**: while any child runs, a CronCreate job (`10,40 * * * *`, just after the children's
+  reports) whose prompt is "devcrew orchestrator: post the board, check on silent children, start the backlog items the
+  gate held back, then wait." posts one line per child from its latest message (phase, tasks done out of the total,
+  testers and CI, blocker). Create it with the first child; delete it once no child runs and the backlog is empty.
+- Does not read the children's screens (except `orca terminal read` below). After each message to a child it sends with
+  `notify_when_idle: true`. A child is idle while it waits on its agents or CI, so an idle notice, or a board run, finds
+  it stopped only when that child has sent nothing for 30 minutes: one `SendMessage` asks where it stands,
+  `orca terminal read` only when that gets no answer, then it resumes the child or tells the user. A child stopped by a
+  usage limit is resumed by a one-shot CronCreate job at the time the limit resets.
 - Keeps the backlog: every work item the user gives, in their order. No fixed cap on children: it starts the next
   backlog item at once, without asking the user, while the machine gate is open and no child has reported a usage limit
   (until that child runs again); the user can set a cap. An item that needs another item merged first, or would likely
   change the same files (judged from the request until that child's plan lands), waits for that child's merge.
 - Hands out what the children share, one child at a time each: a heavy GitHub workflow (a long end-to-end, VM or
-  macOS run), since the children share the account's runners; and each test machine or device (a test PC, a phone, a
-  VM). Requests wait in the order they came. The holder gives it back when its run ends, and asks again for a
+  macOS run), since the children share the account's runners; and each test machine or device (another computer, a
+  phone, a VM). Requests wait in the order they came. The holder gives it back when its run ends, and asks again for a
   rerun; its merge or its stop frees it too.
 - After a child's final report (never before: removing the worktree ends the child), removes its worktree and branches:
   `orca worktree rm --worktree path:<path> --delete-branch`; a squash merge leaves the local branch (Orca cannot prove
@@ -406,7 +411,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 
 - Push and open the PR only from phase 4 on, when the testers start (phase 5 when there are none); merge only in
   phase 6. Release and deploy only when the user asks.
-- No per-task review. No full suite locally: only the tests of what changed, plus the required receipts once in
+- No per-task review. No full suite locally: only the tests of what changed, plus the repo's required checks once in
   phase 4.
 - A temporary workflow is named `tmp-<topic>.yml`, triggers only on `push` to the feature branch, and is gone from the
   diff before the merge (before the PR opens when the PR waited for it).
@@ -416,13 +421,14 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - **Waiting.** Never `sleep`, in the foreground or in a loop. Wait for something that happens (a run ends, CI ends, an
   agent or a child reports) with a background command that ends when it does (`gh run watch`, `gh pr checks --watch`)
   or with the message itself. Wait for a time ("check again in 5 minutes", a run that has not appeared yet) with a
-  one-shot CronCreate job whose prompt names what to check.
-- **Machine gate**, checked before starting tasks or a child: the 1-minute load average is below the number of CPU
-  cores (`sysctl -n vm.loadavg hw.ncpu` on macOS, `/proc/loadavg` and `nproc` on Linux), and at least a tenth of memory
-  is free (`memory_pressure | tail -1` on macOS; `MemAvailable` against `MemTotal` in `/proc/meminfo` on Linux). The
-  load average lags, so one check starts at most as many tasks as cores minus load, rounded down. Gate shut: start
-  nothing new; check again when a task lands, a child reports, or the 30-minute job fires. Running work is never
-  stopped.
+  one-shot CronCreate job whose prompt names what to check; a GitHub run a tester could not find gets a fresh tester
+  for that group (`P4 e2e-rerun#n <group>`) when the job fires.
+- **Machine gate**, checked before starting tasks or a child: the 1-minute load average is below the number of CPU cores
+  (`sysctl -n vm.loadavg hw.ncpu` on macOS, `/proc/loadavg` and `nproc` on Linux, the system's equivalent elsewhere),
+  and at least a tenth of memory is free (`memory_pressure | tail -1` on macOS; `MemAvailable` against `MemTotal` in
+  `/proc/meminfo` on Linux). The load average lags, so one check starts at most as many tasks as cores minus load,
+  rounded down. Gate shut: start nothing new; check again when a task lands, a child reports, or the 30-minute or board
+  job fires; with none of these coming, a one-shot CronCreate job 5 minutes out. Running work is never stopped.
 
 ## Red Flags
 

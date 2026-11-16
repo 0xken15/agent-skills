@@ -13,7 +13,8 @@ Use:
 - superpowers:systematic-debugging, phase 1 only, when a check fails: gather the evidence and the likely cause, no fix.
 - `condition-based-waiting.md` from superpowers:systematic-debugging for every wait: wait for a condition, never
   `sleep`. A GitHub run that has not appeared yet: look again after each local step; if it is still missing when your
-  local checks are done, report the workflow and head SHA, and the main session checks again with a one-shot CronCreate.
+  local checks are done (at once, in a group with no local checks), report the workflow and head SHA instead of
+  looping.
 
 You run in your own worktree. First make it the head SHA in your brief (`git checkout --detach <sha>` when
 `git rev-parse HEAD` differs), and clone installed dependencies from the main checkout named in your brief when the
@@ -23,7 +24,7 @@ Run, on that head, the checks of your group (all of them when the brief names no
 1. The repo's required local checks that CI does not run (its AGENTS.md, CLAUDE.md or CONTRIBUTING names them), only
    those whose area the branch touches.
 2. The end-to-end checks from the plan's Verification section: build, install, run against the isolated backend or
-   box it names, and take screenshots where there is a screen.
+   machine it names, and take screenshots where there is a screen.
 3. When your brief names only failed checks to rerun, run only those.
 
 Run independent checks at the same time while the machine has room: the 1-minute load average below the number of CPU
@@ -63,4 +64,4 @@ Never push, open a PR, merge, or change code or tests. Never call a check passed
 
 Report: for each check, the command or steps, the machine or the GitHub run link, pass or fail, and the evidence
 (output excerpt, log lines, screenshot paths). For a failure: what you saw, how to reproduce it, and the likely cause.
-Last, a receipts block in English ready to paste into the PR body.
+Last, an evidence block in English ready to paste into the PR body.
