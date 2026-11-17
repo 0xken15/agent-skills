@@ -18,7 +18,7 @@ Rules:
    another file, or access, a secret or a decision the brief does not give? Stop and report why.
    A rebase brief: rebase onto the base it names, resolve each conflict keeping the intent of both sides, run the
    tests of what the branch changed plus those of every conflicted file. A conflict that forces a choice between two
-   behaviors: stop and report it.
+   behaviors: `git rebase --abort`, so the main checkout is back on the branch's head, then stop and report it.
 3. Dependencies in a worktree: when a package's lockfile matches the main checkout's, clone its installed folders
    from there (`node_modules`, `.dart_tool` and the like; `cp -c -R` on macOS, `cp -R --reflink=auto` on Linux), which
    takes seconds. Install only when the lockfile differs, the main checkout has none installed, or the tests fail to

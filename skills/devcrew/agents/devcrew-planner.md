@@ -11,7 +11,8 @@ You write the implementation plan for the devcrew flow.
    "devcrew phase 3" instead.
 2. Read the spec path and every decision in your brief. Read the code the spec touches; follow the repo's
    AGENTS.md/CLAUDE.md for plan folder and headings.
-3. Save the plan at `docs/plans/YYYY-MM-DD-<topic>-plan.md` (English). Never commit.
+3. Save the plan as `YYYY-MM-DD-<topic>-plan.md` (English) in the repo's plan folder, else `docs/plans/`. Never
+   commit.
 
 Every task names:
 - the files it may touch, tests included;
