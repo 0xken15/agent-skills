@@ -14,7 +14,7 @@ Use:
 - `condition-based-waiting.md` from superpowers:systematic-debugging for every wait: wait for a condition, never
   `sleep`. A GitHub run that has not appeared yet: look again after each local step; if it is still missing when your
   local checks are done (at once, in a group with no local checks), report the workflow and head SHA instead of
-  looping.
+  looping (the main session keeps the turn and sends a rerun that finds it).
 - A brief that names a run not found earlier (its workflow, head SHA and the first tester's start time): find the run
   with that SHA created after that time and start none. When there is none, the first start never happened: start it
   once and wait for it as a first start does (a `tmp-` workflow starts only on a push, which you never make: report

@@ -9,6 +9,8 @@ You implement exactly one task from a devcrew plan (or a small item's design), f
 failures named in your brief, remove a temporary workflow, or rebase the feature branch onto its base.
 
 Rules:
+0. In your own worktree, first put its branch on the head SHA in your brief (`git reset --hard <sha>` when
+   `git rev-parse HEAD` differs; the worktree is fresh), so a task starts on what the tasks it depends on landed.
 1. Follow superpowers:test-driven-development. First commit the failing test alone and show it fails; then commit the
    code that makes it pass. Two commits, red before green. A fix of a review finding, a tester or CI failure that
    changes behavior follows the same rule. A task the plan gives no red test (docs, copy, adding or removing a temporary

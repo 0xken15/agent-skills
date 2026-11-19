@@ -182,8 +182,9 @@ tasks that do not need it.
   task. Among ready tasks, start first the one the most tasks depend on, directly or through others, then by plan order.
 - No cap of devcrew's own: ready tasks start while the **Machine gate** is open and fewer than 20 subagents run (both
   under Limits); a task either holds back starts when it clears. Each ready task goes to one `devcrew-implementer` in
-  the background, in its own worktree (`isolation: "worktree"`) started from the feature branch's current head,
-  following **REQUIRED SUB-SKILL:** superpowers:dispatching-parallel-agents. The brief carries the plan's path, the task
+  the background, in its own worktree (`isolation: "worktree"`), dispatched as **REQUIRED SUB-SKILL:**
+  superpowers:dispatching-parallel-agents says; its review, integrate and full-suite steps are replaced by the landing
+  steps below. The brief carries the feature branch's head SHA (the worktree starts there), the plan's path, the task
   text, its files, its failing test and the main checkout's path (to clone dependencies from); the agent's definition
   carries the rest. Each dispatch passes the task's `effort` from the plan (`medium`, `high` or `xhigh`), which
   overrides the agent's default `high`. A CI fix or a rebase has no plan entry: the main session picks its effort from
@@ -205,7 +206,7 @@ head SHA and the spec and plan paths. Every fix follows the same rule:
 - a behavior fix gets a red then green test;
 - a small fix (dead code, naming, copy) is just fixed.
 
-Size the diff with `git diff --stat <base>...HEAD`:
+Size the diff with `git diff --stat <base>...HEAD`, leaving out the spec and plan files (`-- . ':!<their folder>'`):
 - **Small** (under about 1,500 changed lines): one reviewer reviews the whole branch diff against the base and the
   spec, then fixes every finding on the feature branch.
 - **Large** (about 1,500 changed lines or more): split it into areas that share no file (a component each, or folders
@@ -271,11 +272,15 @@ runs locally.
 workflow held it back), open it now: fetch the base first; if the branch conflicts with it, rebase (below) before the
 push, since CI does not start on a conflicting PR. Push the branch and open the pull request, ready rather than draft
 where CI skips drafts, with the `hold` label while CI runs when the repo uses one. CI runs the full suites once per
-pushed head; wait for the current head's run with `gh pr checks <PR> --watch` as a background command, which notifies
-the main session when CI ends. On a failure: read the log, a `devcrew-implementer` fixes every failure from that run (a
-behavior fix with a red then green test), then one push; a tester fix and a CI fix that land together go in the same
-push. A fix in the area of a check that passed: a tester for that check's group reruns it once. Never rerun a job to get
-it green. A failure that is also red on the base (the same job fails in the base's latest run,
+pushed head. Right after a push, `gh pr checks` can still show none or the old head's: once
+`gh run list --commit <head>` shows the new head's CI runs (any event but the testers' `workflow_dispatch`; else check
+again with a one-shot job 2 minutes out, and after 10 minutes with none, tell the orchestrator), wait with
+`gh pr checks <PR> --watch` (plus `--required` when the base requires checks) as a background command, which notifies
+the main session when CI ends; a tester's run failing there is the tester's, not CI's. No runs after the push and the
+PR shows a conflict: rebase (below). On a failure: read the log, a `devcrew-implementer` fixes every failure from that
+run (a behavior fix with a red then green test), then one push; a tester fix and a CI fix that land together go in the
+same push. A fix in the area of a check that passed: a tester for that check's group reruns it once. Never rerun a job
+to get it green. A failure that is also red on the base (the same job fails in the base's latest run,
 `gh run list --branch <base>`) is not this branch's: fix nothing and send the orchestrator both run links; the merge
 waits, and the orchestrator asks the user, recommending holding the merge.
 
@@ -305,8 +310,9 @@ PR link and the merge, every decision the orchestrator gave (so the user can rev
 took: brainstorm and spec, plan (a small item: the design), implementation, review, testers, CI, merge, and apart from
 them the time spent waiting for the orchestrator's answers. To have it, the main session posts a
 status line in its own chat with the UTC time (`date -u +%H:%M`) when each phase starts and when it starts and stops
-waiting for an answer. Before it, the child removes every worktree and branch it made that is still there
-(`git worktree list`, after a crash or a usage limit) and names any it could not.
+waiting for an answer. Before it, the child posts the issue comment for the merged PR (if any) and removes every
+worktree and branch it made that is still there (`git worktree list`, after a crash or a usage limit), naming any it
+could not; the final report comes last, since the orchestrator then removes the child's worktree.
 
 ## Run without stopping
 
@@ -315,9 +321,10 @@ review, the testers, CI and the merge through to the report without asking to co
 status line (task done, tests green, what started) and go on.
 
 About every 30 minutes, send a progress report to the orchestrator; it is the child's main message. At the start of
-phase 1 (a small item too: when its design starts), create a recurring job with CronCreate (`7,37 * * * *`) whose
-prompt is: "devcrew: send the progress report to the orchestrator <its name>, check the machine gate and start the ready
-tasks it held back, then continue the run without waiting; redo no work because of this prompt." It fires only while
+phase 1 (a small item too: when its design starts), create a recurring job with CronCreate (`7,37 * * * *`), unless
+one is set (a step-up keeps it), whose prompt is: "devcrew: send the progress report to the orchestrator <its name>,
+check the machine gate and start the ready tasks it held back, then go on with the run; wait for no reply to the
+report, only for an answer the run needs; redo no work because of this prompt." It fires only while
 the main session waits, so it can land a few minutes late. Delete it with CronDelete just before sending the final
 report, and from phase 3 on while a question holds back all the work with nothing running; create it again when work
 resumes. Each report, in the user's language, a few lines:
@@ -338,9 +345,9 @@ Stop and ask the orchestrator only when the run cannot go on without an answer:
 
 While waiting for the answer, the tasks that do not need it keep running and landing; only what needs it waits.
 The answer goes to a fresh `devcrew-implementer` in its brief. A secret comes as a file path or an environment
-variable's name, never in a message or a brief. No reply in 30 minutes: send the question again once; still none 30
-minutes later: the orchestrator may be gone, so say so in its own chat (the user can open it in Orca), keep the rest
-running, and wait.
+variable's name, never in a message or a brief. A reply that it waits on the user is an answer: wait, with no resend.
+No reply in 30 minutes: send the question again once; still none 30 minutes later: the orchestrator may be gone, so
+say so in its own chat (the user can open it in Orca), keep the rest running, and wait.
 A child whose only step left is a merge held for the user deletes its 30-minute job, tells the orchestrator, and
 waits. When the answer comes it acts on it: it merges only once phase 6's conditions hold, or, for a failure also red
 on the base, when the user says to merge anyway (that waives only that failure). When the repo's branch protection then
@@ -365,16 +372,18 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   - Installed, but a skill is missing (an older version): `claude plugin update superpowers@<its marketplace>`.
   - It tells the user in one line what it installed or updated; children started afterwards load it. When the command
     fails, it tells the user the command and stops: no fetching the skills by hand, no running the flow from memory.
-  - Also checks the `devcrew-*` agents and the `run` skill (missing: tell the user to run this repo's `install.sh`), its
-    own CronCreate, CronDelete, SendMessage and ListAgents tools, `orca --help` and `gh auth status`. Anything missing
-    that it cannot install: tell the user the command and stop.
-- A child reports a missing superpowers skill: install or update as above, then start a fresh session in that child's
-  worktree, since a running session loads no new plugin:
+  - Also checks the `devcrew-*` agents (missing: tell the user to run this repo's `install.sh`), the `run` skill (built
+    into Claude Code; missing: tell the user to update Claude Code), its own CronCreate, CronDelete, SendMessage and
+    ListAgents tools, `orca --help` and `gh auth status`. Anything missing that it cannot install: tell the user the
+    command and stop.
+- A child reports a missing superpowers skill: install or update as above, close the old child's terminal
+  (`orca terminal close --terminal <handle>`), then start a fresh session in that child's worktree, since a running
+  session loads no new plugin:
   ```
   orca agent launch --agent claude --model <own model> [--effort <own effort>] --worktree path:<its path> \
     --prompt "<its /devcrew prompt, with the current size> Resume from the branch at phase <n>."
   ```
-  The resumed child rebuilds its state from git and its messages and creates its 30-minute job again.
+  The resumed child rebuilds its state from git and its messages, as its **Resuming** rule says.
 - **Its own model and effort**, which every child's session gets, so a child's main session thinks the way the
   orchestrator does. Read them each time a child session starts:
   - `<own model>`: the exact model ID its system prompt names now ("The exact model ID is ..."); a Sonnet or Haiku ID
@@ -387,15 +396,19 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   the repo's default branch unless the user names another):
   ```
   orca worktree create --name <topic> --branch <type>/<topic> --base-branch origin/<base> --agent claude \
-    --model <own model> [--effort <own effort>] --parent-worktree path:<orchestrator's checkout> \
+    --model <own model> [--effort <own effort>] --parent-worktree path:<orchestrator's checkout> --json \
     --prompt "/devcrew <feature>. Orchestrator: <its name>. Size: <small|full>. <what the user decided>"
   ```
   The prompt carries every decision the user made, so the child's brainstorm asks only what is still open. Never
-  `--no-parent`: the child sits under the orchestrator's checkout in Orca.
+  `--no-parent`: the child sits under the orchestrator's checkout in Orca. Keep the worktree path and the branch the
+  JSON returns (Orca adds a number to a taken name) and use them, never the requested name, in every later command. The
+  child's terminal handle comes from `orca terminal list --worktree path:<its path> --json`; every
+  `orca terminal read`, `send` or `close` of that child passes `--terminal <handle>`, since without it the command
+  reaches the orchestrator's own terminal.
 - Checks that the child's first message arrives, with a one-shot CronCreate job 10 minutes out; when it has not,
-  `orca terminal read` the child, then tell the user what it shows. A `[Cross-session delivery notice]` that a message
-  is held or refused means the two sessions run in different permission modes: tell the user, since messages will not
-  flow.
+  `orca terminal read --screen` the child, then tell the user what it shows. A `[Cross-session delivery notice]` that a
+  message is held or refused means the two sessions run in different permission modes: tell the user, since messages
+  will not flow.
 - Holds the user's requirements, so it approves every child's spec and plan itself, without asking the user. It reads
   each against what the user asked and sends back what misses it or goes beyond it: a new data path, component, platform
   or visible feature the user did not ask for. Limits and details inside the request are fine, and so is the same cause
@@ -408,7 +421,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   recommending the option that leaves it out.
 - Only what the user alone can give goes to them, and their answer goes back to the child: access or a secret, a check
   against production, a check that needs the user themselves (their own login, their eye), a hard-to-undo choice they
-  did not name (above), a failure that is also red on the base, and a stop condition after two failed rounds. While it
+  did not name (above), a failure that is also red on the base, and a stop condition after two failed rounds. It tells
+  the child at once that the question waits on the user, and again when a 5-minute job acts on it. While it
   waits, the child keeps running; only the merge waits for a check that needs the user. A check that needs the user
   themselves is done by the user, never by a tester.
 - **Asking the user.** A plain chat message, never the AskUserQuestion tool (it blocks their screen): the context, the
@@ -421,39 +435,65 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   secret or access the user has not given, and never merges before phase 6's conditions hold. For a missing check it
   recommends holding the merge; for a part of the work, leaving it out of this branch; after two failed rounds, holding
   the merge for one more round (one more fix push or tester rerun) with fresh evidence: green, it merges; red again,
-  the merge waits for the user. A held merge shows on each board run, with no new 5-minute job.
+  the merge waits for the user. A held merge shows on each board run (even unchanged), with no new 5-minute job.
 - **The user's word on running work** (hold merges, a cap, stop one item) goes at once to every running child it
   concerns, and into the prompt of children started later; it overrides phase 6. A child answers a hold with "held" or
   "merged <SHA>". A merge the user held waits for their word: never asked with a 5-minute job, never acted on by one.
 - **Stop.** When the user says to stop everything: delete every job it made (board, first-message, 5-minute, gate,
-  usage-limit), tell each child to stop, and start nothing until the user says go. A told child stops its agents and
-  background commands, deletes its jobs, cleans up only what it made, and reports where it stands. Worktrees, branches
-  and PRs stay, with `hold` when the repo uses one. On go: tell each child to resume; it goes on from where it stood and
-  creates its jobs again.
-- **Restarted.** A new orchestrator session (the old one closed) finds the running children with `orca worktree list`
-  (those under its checkout), sends each its own name and asks where it stands, what it waits for, the orchestrator's
-  decisions it got, and any shared workflow or device it holds; a child then sends everything to the new name, and
-  replaces its 30-minute job with one that names it. The new orchestrator creates the board job, rebuilds the queue of
-  shared things from the answers, reads each child's prompt (`orca terminal read`) for what the user asked, and asks
-  the user only what it still cannot tell, including backlog items not yet started, which were in the old session only.
+  usage-limit; the screen job once every child reports it stopped), tell each child to stop, and start nothing until
+  the user says go. A told child stops its agents and background commands, cancels the GitHub runs it started
+  (`gh run cancel <id>`) before giving back a shared turn, deletes its jobs, and reports where it stands. The child's
+  own worktree, branch and PR stay, with `hold` when the repo uses one. On go: create the board and screen jobs again
+  and a 5-minute job for each user question still open, and tell each child to resume (it resumes as the child's
+  **Resuming** rule says).
+- **Restarted.** A new orchestrator session finds the children with `orca worktree list` (those under its checkout)
+  and reads each one's prompt (`orca terminal read --terminal <handle>`) for what the user asked and the old
+  orchestrator's name. When `ListAgents` shows another session by that name (not this one), the old orchestrator may
+  be alive: ask the user before taking over. Otherwise it sends each child, with
+  `orca terminal send --terminal <handle> --text "<message>" --enter` (it does not know the child's session name
+  yet), its own name, and asks where it stands, what it waits for, the
+  orchestrator's decisions it got, the user's word it got (a hold, a cap, a stop), and any shared workflow or device it
+  holds. A child then sends everything to the new name, and replaces its 30-minute job with one that names it. The new
+  orchestrator creates the board and screen jobs, rebuilds the queue of shared things from the answers, and asks the
+  user only what it still cannot tell, including backlog items not yet started, which were in the old session only.
 - Relays to the user at once, in the user's language and in a few lines: a question only they can answer, a blocker, a
   PR link (from the first report that carries it), a final report (with the merge), and each child it starts (item,
   size, branch). The rest of the progress reports goes in the **board**: while any child runs, a CronCreate job
   (`10,40 * * * *`, just after the children's reports) whose prompt is "devcrew orchestrator: post the board, check on
   silent children, start the backlog items the gate held back, then wait." posts one line per child from its latest
   message (phase, tasks done out of the total, testers and CI, PR, blocker), and one line per backlog item the gate or a
-  dependency holds back. Create it with the first child; delete it once no child runs and the backlog is empty.
-- Does not read the children's screens (except `orca terminal read` below). It sends every message to a child with
+  dependency holds back; only the lines that changed since the last board, plus each held merge, and nothing when
+  nothing did. Create it with the first child; delete it once no child runs and the backlog is empty.
+- **Prompts on a child's screen.** A child can stop on a dialog nobody watches (a permission prompt, a trust or
+  warning dialog), and then it sends nothing. With the board job, create a second recurring job (`*/5 * * * *`, same
+  life as the board) whose prompt is "devcrew orchestrator: check the children's screens for a prompt, then wait." It
+  reads the bottom of the screen of each child that has not sent its final report
+  (`orca terminal read --screen --terminal <handle> --limit 30`); a usage-limit message there is handled as below. For
+  a dialog waiting on an answer, it decides as the user would:
+  - **Yes** when the action stays inside the child's item and what this skill allows, and the user's word (a hold, a
+    stop) does not hold it back: work in its worktree or the repo, local builds, tests and installs, its feature branch,
+    PR and test workflows on GitHub, its isolated test backends and test accounts, trusting its own worktree; and an
+    action the user allowed for that child when its dialog comes back. Send the number the screen shows for the plain
+    yes (not "don't ask again"): `orca terminal send --terminal <handle> --text "<n>"`.
+  - **No** for anything else: production, secrets, real accounts, the user's own apps or services, deleting outside the
+    worktree, pushing to the base, a release or deploy, or anything this skill forbids. Send Escape
+    (`--text $'\x1b'`), tell the child why with `SendMessage`, and when only the user can give it, ask them (Asking the
+    user; the recommendation is no).
+  It reads the screen again just before sending, and after it: a dialog still showing with that option selected gets
+  Enter (`--text "" --enter`). It lists each "no" with the child's decisions. Only a dialog: it never types into a
+  child's prompt line.
+- Reads the children's screens only as this skill says (dialogs above, `orca terminal read` below). It sends every
+  message to a child with
   `notify_when_idle: true`. A child is idle while it waits on its agents or CI, so an idle notice, or a board run, finds
   it stopped only when that child has sent nothing for 45 minutes (its 30-minute report can land late) and is not
   waiting on an answer (a held merge, a question to the orchestrator or the user): one `SendMessage` asks where it
-  stands, `orca terminal read` only when that gets no answer, then it resumes the child or tells the user. A child stopped by a
-  usage limit (the limit's message, read on its screen, gives the reset time) is resumed by a one-shot CronCreate job
-  just after that time, which sends it "continue"; the child then removes the worktree of every implementer or tester
-  that never reported and starts that work again from the head, under the same label (not a retry).
+  stands; no answer by the next board run: `orca terminal read --screen --terminal <handle>`, then it resumes the
+  child or tells the user. A child stopped by a usage limit (the limit's message, read on its screen, gives the reset
+  time) is resumed by a one-shot CronCreate job just after that time, which sends it "continue".
 - Keeps the backlog: every work item the user gives, in their order. No fixed cap on children: it starts the next
   backlog item at once, without asking the user, while the machine gate is open and no child is stopped by a usage limit
-  (until that child runs again); the user can set a cap. An item that needs another item merged first, or would likely
+  (until that child runs again); one child per gate check, so the next waits for the next check (a child's first
+  message, a report, a job). The user can set a cap. An item that needs another item merged first, or would likely
   change the same files (judged from the request until that child's plan lands), waits for that child's merge.
 - Hands out what the children share, one child at a time each: one turn for all heavy GitHub workflows (a long
   end-to-end, VM or macOS run that devcrew starts), since the children share the account's runners; and each test
@@ -462,9 +502,9 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   loses it: the orchestrator checks that its run or device is idle, then hands it on.
 - After a child's final report (never before: removing the worktree ends the child), removes its worktree and branches:
   `orca worktree rm --worktree path:<path> --delete-branch`; a squash merge leaves the local branch (Orca cannot prove
-  it merged), so once `gh pr view <PR> --json state` says `MERGED`, `git branch -D <type>/<topic>`; then the remote
-  branch, unless GitHub already deleted it, with `git push origin --delete <type>/<topic>` once its head matches the
-  merged PR's.
+  it merged), so once `gh pr view <PR> --json state,headRefName` says `MERGED` with that branch as its head,
+  `git branch -D <branch>`; then the remote branch, unless GitHub already deleted it, with
+  `git push origin --delete <branch>` once its head matches the merged PR's (`<branch>`: the one `create` returned).
 
 **Child** (its prompt names an orchestrator).
 - Its first message to the orchestrator confirms that the superpowers skills, the devcrew agents, the `run` skill and
@@ -481,8 +521,19 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   user's language, with a first line that stands alone.
 - Before a heavy workflow starts (the dispatch of a tester whose group runs on GitHub, or any push while a `tmp-`
   workflow is in the branch, since each push starts it), and before a tester uses a shared test machine or device, it
-  asks the orchestrator and waits for the go; it gives it back when that run ends, and when a run was never found (the
-  rerun asks again). Local testers and the PR's own CI need no go.
+  asks the orchestrator and waits for the go; it gives it back when that run ends. A run the tester could not find
+  keeps the turn until the rerun tester finds it or reports it missing. Local testers and the PR's own CI need no go.
+- **Resuming** (any message or job that wakes it after a usage limit, a stop or a crash, or a fresh session in its
+  worktree), before going on. A **cut-off** agent is one that is no longer running and never reported, or that ended on
+  the usage limit; an agent still running is left alone.
+  1. A main checkout left mid-rebase, mid-cherry-pick or with edits by a cut-off agent: `git rebase --abort` (or
+     `git cherry-pick --abort`), then `git stash push -u -m "devcrew: <label> cut off"` for leftover edits.
+  2. Remove each cut-off agent's worktree and start its work again from the head under the same label (not a retry: it
+     does not count toward the two rounds).
+  3. A cut-off tester of a GitHub group: ask for the turn again first when the child gave it back or lost it. After a
+     stop (its run was cancelled), the new tester starts the run afresh; otherwise its brief is that of a run not found
+     earlier (workflow, head SHA, first start time), so it finds the old run and starts none.
+  4. Create its 30-minute job unless one is set.
 
 ## Limits
 

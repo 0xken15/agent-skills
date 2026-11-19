@@ -19,8 +19,8 @@ cd agent-skills
 updates them. It never overwrites a file that is not one of its links; it skips that file, says so, and exits 1.
 
 devcrew also needs the [superpowers](https://github.com/obra/superpowers) plugin (it installs it on first run when
-missing), the `run` skill, the `gh` CLI signed in, the `orca` CLI for its worktree sessions, and Claude Code's
-`CronCreate`, `CronDelete`, `SendMessage`, `ListAgents` and `TaskStop` tools.
+missing), the `run` skill (built into Claude Code), the `gh` CLI signed in, the `orca` CLI for its worktree sessions,
+and Claude Code's `CronCreate`, `CronDelete`, `SendMessage`, `ListAgents` and `TaskStop` tools.
 
 ## Layout
 
