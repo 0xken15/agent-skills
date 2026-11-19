@@ -117,7 +117,7 @@ A **small** item runs the phases below with these changes:
 - Phase 4: one reviewer (small diff), its brief carrying the design instead of the spec and plan paths, when it
   touches logic; a docs, copy or config change gets no review. Testers only
   for the checks the repo requires for its area.
-- No 30-minute job: the phase messages are the reports. Phases 5 and 6 as written.
+- Phases 5 and 6 as written.
 
 A small item that stops fitting (the diff passes the limits or clearly will, a product question opens, or it
 touches data, auth or security) steps up at once: the child stops its running implementers (TaskStop) and removes
@@ -314,16 +314,17 @@ The orchestrator's go on the plan (a small item's design) covers phases 3 to 6. 
 review, the testers, CI and the merge through to the report without asking to continue. When a task lands, post one
 status line (task done, tests green, what started) and go on.
 
-About every 30 minutes (full items only), send a progress report to the orchestrator. At the start of phase 1 (or of a
-step-up), create a recurring job with CronCreate (`7,37 * * * *`) whose prompt is: "devcrew: send the progress report to
-the orchestrator <its name>, check the machine gate and start the ready tasks it held back, then continue the run
-without waiting; redo no work because of this prompt." It fires only while the main session waits, so it can land a few
-minutes late. Delete it with CronDelete just before sending the final report, and from phase 3 on while a question holds
-back all the work with nothing running; create it again when work resumes. Each report, in the user's language, a few
-lines:
+About every 30 minutes, send a progress report to the orchestrator; it is the child's main message. At the start of
+phase 1 (a small item too: when its design starts), create a recurring job with CronCreate (`7,37 * * * *`) whose
+prompt is: "devcrew: send the progress report to the orchestrator <its name>, check the machine gate and start the ready
+tasks it held back, then continue the run without waiting; redo no work because of this prompt." It fires only while
+the main session waits, so it can land a few minutes late. Delete it with CronDelete just before sending the final
+report, and from phase 3 on while a question holds back all the work with nothing running; create it again when work
+resumes. Each report, in the user's language, a few lines:
 - the phase;
 - tasks done out of the total, running, waiting and sent back;
-- the test status; from phase 4, each tester group, the CI run of the current head, and any rebase or merge;
+- the test status; from phase 4, each tester group, the PR link, the CI run of the current head and its result, and
+  any rebase;
 - any blocker.
 
 Stop and ask the orchestrator only when the run cannot go on without an answer:
@@ -340,10 +341,10 @@ The answer goes to a fresh `devcrew-implementer` in its brief. A secret comes as
 variable's name, never in a message or a brief. No reply in 30 minutes: send the question again once; still none 30
 minutes later: the orchestrator may be gone, so say so in its own chat (the user can open it in Orca), keep the rest
 running, and wait.
-A child whose only step left is a merge held for the user deletes its 30-minute job (if it has one), tells the
-orchestrator, and waits. When the answer comes it acts on it: it merges only once phase 6's conditions hold, or, for a
-failure also red on the base, when the user says to merge anyway (that waives only that failure). When the repo's
-branch protection then refuses the merge, it tells the orchestrator and leaves the PR as it is.
+A child whose only step left is a merge held for the user deletes its 30-minute job, tells the orchestrator, and
+waits. When the answer comes it acts on it: it merges only once phase 6's conditions hold, or, for a failure also red
+on the base, when the user says to merge anyway (that waives only that failure). When the repo's branch protection then
+refuses the merge, it tells the orchestrator and leaves the PR as it is.
 
 ## Orchestrator and children
 
@@ -373,7 +374,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   orca agent launch --agent claude --model <own model> [--effort <own effort>] --worktree path:<its path> \
     --prompt "<its /devcrew prompt, with the current size> Resume from the branch at phase <n>."
   ```
-  The resumed child rebuilds its state from git and its messages; a full item creates its 30-minute job again.
+  The resumed child rebuilds its state from git and its messages and creates its 30-minute job again.
 - **Its own model and effort**, which every child's session gets, so a child's main session thinks the way the
   orchestrator does. Read them each time a child session starts:
   - `<own model>`: the exact model ID its system prompt names now ("The exact model ID is ..."); a Sonnet or Haiku ID
@@ -436,17 +437,17 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   shared things from the answers, reads each child's prompt (`orca terminal read`) for what the user asked, and asks
   the user only what it still cannot tell, including backlog items not yet started, which were in the old session only.
 - Relays to the user at once, in the user's language and in a few lines: a question only they can answer, a blocker, a
-  PR link, a merge, a final report, and each child it starts (item, size, branch). The rest (phase starts, progress
-  reports) goes in the **board**: while any child runs, a CronCreate job (`10,40 * * * *`, just after the children's
-  reports) whose prompt is "devcrew orchestrator: post the board, check on silent children, start the backlog items the
-  gate held back, then wait." posts one line per child from its latest message (phase, tasks done out of the total,
-  testers and CI, blocker), and one line per backlog item the gate or a dependency holds back. Create it with the first
-  child; delete it once no child runs and the backlog is empty.
+  PR link (from the first report that carries it), a final report (with the merge), and each child it starts (item,
+  size, branch). The rest of the progress reports goes in the **board**: while any child runs, a CronCreate job
+  (`10,40 * * * *`, just after the children's reports) whose prompt is "devcrew orchestrator: post the board, check on
+  silent children, start the backlog items the gate held back, then wait." posts one line per child from its latest
+  message (phase, tasks done out of the total, testers and CI, PR, blocker), and one line per backlog item the gate or a
+  dependency holds back. Create it with the first child; delete it once no child runs and the backlog is empty.
 - Does not read the children's screens (except `orca terminal read` below). It sends every message to a child with
   `notify_when_idle: true`. A child is idle while it waits on its agents or CI, so an idle notice, or a board run, finds
-  it stopped only when that child has sent nothing for 30 minutes and is not waiting on the user (a held merge, a
-  question): one `SendMessage` asks where it stands,
-  `orca terminal read` only when that gets no answer, then it resumes the child or tells the user. A child stopped by a
+  it stopped only when that child has sent nothing for 45 minutes (its 30-minute report can land late) and is not
+  waiting on an answer (a held merge, a question to the orchestrator or the user): one `SendMessage` asks where it
+  stands, `orca terminal read` only when that gets no answer, then it resumes the child or tells the user. A child stopped by a
   usage limit (the limit's message, read on its screen, gives the reset time) is resumed by a one-shot CronCreate job
   just after that time, which sends it "continue"; the child then removes the worktree of every implementer or tester
   that never reported and starts that work again from the head, under the same label (not a retry).
@@ -457,7 +458,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - Hands out what the children share, one child at a time each: one turn for all heavy GitHub workflows (a long
   end-to-end, VM or macOS run that devcrew starts), since the children share the account's runners; and each test
   machine or device (another computer, a phone, a VM). Requests wait in the order they came. The holder gives it back
-  when its run ends, and asks again for a rerun; its merge or its stop frees it too. A holder silent for 30 minutes
+  when its run ends, and asks again for a rerun; its merge or its stop frees it too. A holder silent for 45 minutes
   loses it: the orchestrator checks that its run or device is idle, then hands it on.
 - After a child's final report (never before: removing the worktree ends the child), removes its worktree and branches:
   `orca worktree rm --worktree path:<path> --delete-branch`; a squash merge leaves the local branch (Orca cannot prove
@@ -473,9 +474,11 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   spec's approval, the plan's open questions and go, and every stop condition (it passes on to the user only what they
   alone can give). The child sends each with `SendMessage` (`to`: the orchestrator's name), waits for the reply when it
   blocks the next step, and acts on it as the user's. It never uses the AskUserQuestion tool: nobody watches its screen.
-- It also sends, unasked: the start of each phase, the 30-minute progress reports (Run without stopping), the PR
-  link, the CI result of each run, the merge with its SHA, and the final report. Each message is short, in
-  the user's language, with a first line that stands alone.
+- Progress travels only in the 30-minute reports (Run without stopping), which carry the phase, the PR link and CI,
+  and in the final report, sent right after the merge with its SHA (items waiting on that merge start on it). Phase
+  starts, a new PR, a CI result and the merge get no message of their own. Its other messages are the ones this skill
+  names: questions, a go asked for or given back, and notices the orchestrator acts on. Each message is short, in the
+  user's language, with a first line that stands alone.
 - Before a heavy workflow starts (the dispatch of a tester whose group runs on GitHub, or any push while a `tmp-`
   workflow is in the branch, since each push starts it), and before a tester uses a shared test machine or device, it
   asks the orchestrator and waits for the go; it gives it back when that run ends, and when a run was never found (the
