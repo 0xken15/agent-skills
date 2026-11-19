@@ -34,13 +34,13 @@ its Orca worktree (see Orchestrator and children).
 |---|---|
 | Orchestrator: backlog, children's questions, the board | The model the user runs it on |
 | Main session: brainstorm questions, the spec, the task queue, cherry-picks, checks | The orchestrator's own model and effort |
-| Writing the plan (phase 2) | Opus; Fable for a hard plan. Updating any plan: Opus |
+| Writing and updating the plan (phase 2) | Opus |
 | Code: every implementer, every fix | Opus |
 | Every review: the spec's builder check, the final reviewer-fixer and the fix-diff review | Opus |
 | End-to-end and required local checks: the tester | Opus |
 | Sonnet, Haiku | Never |
 
-Always the newest version of Opus and Fable (the `opus` and `fable` aliases resolve to the newest). The main session
+Always the newest version of Opus (the `opus` alias resolves to the newest). The main session
 writes no code, so its context stays small for the whole run: every code change, including a CI fix or a rebase, goes to
 a `devcrew-implementer`.
 
@@ -60,11 +60,11 @@ the approved spec's path and every decision the user and the orchestrator made.
 
 Every subagent is a named agent installed with this skill, dispatched with `subagent_type`. Its definition carries the
 model and the standing rules (TDD, tests of what changed only, no push, what to report), so the brief carries only
-the task. Never pass `model`, except `model: "fable"` for a hard plan (phase 2) and `model: "opus"` for the builder
-check; always pass `effort` from the table above.
+the task. Never pass `model`, except `model: "opus"` for the builder check; always pass `effort` from the table above.
 
 One exception: the spec's builder check in phase 1 is dispatched the way superpowers:brainstorming says, not as a
-named agent. Pass `model: "opus"` (the main session may run Fable) and `effort: "high"`.
+named agent. Pass `model: "opus"` (the main session runs the orchestrator's model, which may differ) and
+`effort: "high"`.
 
 Every dispatch's `description` starts with its place in the run, so the running agents show where they belong; the
 30-minute and final reports use the same labels:
@@ -84,7 +84,7 @@ Every dispatch's `description` starts with its place in the run, so the running 
 
 | Agent (`subagent_type`) | Model, default effort | Phase |
 |---|---|---|
-| `devcrew-planner` | Opus, `high` | 2: write the plan (a hard plan: `model: "fable"`, `effort: "xhigh"`); update it after the orchestrator's answers (`effort: "high"`, no `model`) |
+| `devcrew-planner` | Opus, `high` | 2: write the plan (a hard plan: `effort: "xhigh"`); update it after the orchestrator's answers (`effort: "high"`) |
 | `devcrew-implementer` | Opus, `high` | 3: one task; a task sent back; 4: fixes of one area's review findings, fix of a failed tester check, removing the temporary workflow; 5: CI fixes; 4-6: a rebase |
 | `devcrew-reviewer` | Opus, `xhigh` | 4: final review and fix of the whole branch (small diff), or find-only review of one area (large diff) |
 | `devcrew-fix-reviewer` | Opus, `high` | 4: review of the fix diff only |
@@ -140,8 +140,8 @@ the spec.
 
 **2. Plan.** The plan is **hard** when the spec touches two or more components; stores, syncs or exposes data; touches
 security, migration or concurrency; or, by the spec's own estimate, needs six tasks or more. A hard plan's dispatch
-passes `model: "fable"` and `effort: "xhigh"`; any other plan, and every update after the orchestrator's answers (even
-of a hard plan), uses the planner's own Opus and `high`. The status line for phase 2 names which and why. A
+passes `effort: "xhigh"`; any other plan, and every update after the orchestrator's answers (even of a hard plan),
+uses the planner's own `high`; the planner always runs on Opus. The status line for phase 2 names which and why. A
 `devcrew-planner` subagent follows the installed superpowers:writing-plans skill. Where it names an execution skill (the
 plan header and its handoff), it names devcrew phase 3 instead. It saves the plan at the docs path and commits nothing.
 Every task names:
