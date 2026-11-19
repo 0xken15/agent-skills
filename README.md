@@ -27,6 +27,7 @@ and Claude Code's `CronCreate`, `CronDelete`, `SendMessage`, `ListAgents` and `T
 ```
 skills/<name>/SKILL.md        the skill
 skills/<name>/agents/*.md     the subagents it dispatches, named <name>-<role>
+skills/<name>/*.sh            scripts it runs (with bash)
 ```
 
 A new skill is a new folder under `skills/`; run `./install.sh` again to link it.

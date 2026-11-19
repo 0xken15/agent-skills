@@ -406,7 +406,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   `orca terminal read`, `send` or `close` of that child passes `--terminal <handle>`, since without it the command
   reaches the orchestrator's own terminal.
 - Checks that the child's first message arrives, with a one-shot CronCreate job 10 minutes out; when it has not,
-  `orca terminal read --screen` the child, then tell the user what it shows. A `[Cross-session delivery notice]` that a
+  `orca terminal read --screen` the child: a dialog there is answered by the dialog rule (Prompts on a child's
+  screen); anything else, tell the user what it shows. A `[Cross-session delivery notice]` that a
   message is held or refused means the two sessions run in different permission modes: tell the user, since messages
   will not flow.
 - Holds the user's requirements, so it approves every child's spec and plan itself, without asking the user. It reads
@@ -439,46 +440,59 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - **The user's word on running work** (hold merges, a cap, stop one item) goes at once to every running child it
   concerns, and into the prompt of children started later; it overrides phase 6. A child answers a hold with "held" or
   "merged <SHA>". A merge the user held waits for their word: never asked with a 5-minute job, never acted on by one.
-- **Stop.** When the user says to stop everything: delete every job it made (board, first-message, 5-minute, gate,
-  usage-limit; the screen job once every child reports it stopped), tell each child to stop, and start nothing until
-  the user says go. A told child stops its agents and background commands, cancels the GitHub runs it started
+- **Stop.** When the user says to stop everything: delete every job it made (first-message, 5-minute, gate, usage-limit;
+  the board job and the dialog watcher once every child reports it stopped), tell each child to stop, and start nothing
+  until the user says go. A told child stops its agents and background commands, cancels the GitHub runs it started
   (`gh run cancel <id>`) before giving back a shared turn, deletes its jobs, and reports where it stands. The child's
-  own worktree, branch and PR stay, with `hold` when the repo uses one. On go: create the board and screen jobs again
-  and a 5-minute job for each user question still open, and tell each child to resume (it resumes as the child's
-  **Resuming** rule says).
-- **Restarted.** A new orchestrator session finds the children with `orca worktree list` (those under its checkout)
-  and reads each one's prompt (`orca terminal read --terminal <handle>`) for what the user asked and the old
-  orchestrator's name. When `ListAgents` shows another session by that name (not this one), the old orchestrator may
-  be alive: ask the user before taking over. Otherwise it sends each child, with
-  `orca terminal send --terminal <handle> --text "<message>" --enter` (it does not know the child's session name
-  yet), its own name, and asks where it stands, what it waits for, the
-  orchestrator's decisions it got, the user's word it got (a hold, a cap, a stop), and any shared workflow or device it
-  holds. A child then sends everything to the new name, and replaces its 30-minute job with one that names it. The new
-  orchestrator creates the board and screen jobs, rebuilds the queue of shared things from the answers, and asks the
-  user only what it still cannot tell, including backlog items not yet started, which were in the old session only.
+  own worktree, branch and PR stay, with `hold` when the repo uses one. On go: create the board job again, start the
+  dialog watcher, create a 5-minute job for each user question still open, and tell each child to resume (it resumes as
+  the child's **Resuming** rule says).
+- **Restarted.** A new orchestrator session finds the children with `orca worktree list` (those under its checkout) and
+  reads each one's prompt (`orca terminal read --terminal <handle>`, paging back with `--cursor` from the `oldestCursor`
+  it returns) for what the user asked and the old orchestrator's name. When `ListAgents` shows another session by that
+  name (not this one), the old orchestrator may be alive: ask the user before taking over. Otherwise, after reading its
+  screen (`--screen`) and answering any dialog there by the dialog rule, it sends each child, with
+  `orca terminal send --terminal <handle> --text "<message>" --enter` (it does not know the child's session name yet),
+  its own name, and asks for its original prompt when that was cut from the output, where it stands, what it waits for,
+  the orchestrator's decisions it got, the user's word it got (a hold, a cap, a stop), and any shared workflow or device
+  it holds. A child then sends everything to the new name, and replaces its 30-minute job with one that names it. The
+  new orchestrator creates the board job, starts the dialog watcher, rebuilds the queue of shared things from the
+  answers, and asks the user only what it still cannot tell, including backlog items not yet started, which were in the
+  old session only.
 - Relays to the user at once, in the user's language and in a few lines: a question only they can answer, a blocker, a
   PR link (from the first report that carries it), a final report (with the merge), and each child it starts (item,
   size, branch). The rest of the progress reports goes in the **board**: while any child runs, a CronCreate job
-  (`10,40 * * * *`, just after the children's reports) whose prompt is "devcrew orchestrator: post the board, check on
-  silent children, start the backlog items the gate held back, then wait." posts one line per child from its latest
+  (`10,40 * * * *`, just after the children's reports) whose prompt is "devcrew orchestrator: post the board, read the
+  children's screens for a dialog, check on silent children, start the backlog items the gate held back, then wait."
+  posts one line per child from its latest
   message (phase, tasks done out of the total, testers and CI, PR, blocker), and one line per backlog item the gate or a
   dependency holds back; only the lines that changed since the last board, plus each held merge, and nothing when
   nothing did. Create it with the first child; delete it once no child runs and the backlog is empty.
-- **Prompts on a child's screen.** A child can stop on a dialog nobody watches (a permission prompt, a trust or
-  warning dialog), and then it sends nothing. With the board job, create a second recurring job (`*/5 * * * *`, same
-  life as the board) whose prompt is "devcrew orchestrator: check the children's screens for a prompt, then wait." It
-  reads the bottom of the screen of each child that has not sent its final report
-  (`orca terminal read --screen --terminal <handle> --limit 30`); a usage-limit message there is handled as below. For
-  a dialog waiting on an answer, it decides as the user would:
+- **Prompts on a child's screen.** A child can stop on a dialog nobody watches (a permission prompt; at start, a
+  trust, permission-mode or project MCP server dialog), and then it sends nothing. Two watches find it:
+  - **The dialog watcher**, at no token cost while it waits: with the first child, start
+    `bash <this skill's folder>/watch-dialogs.sh <scratch dir>/devcrew-dialogs.state <handle>...` (the handle of each
+    child that has not sent its final report) as a background command. It reads their screens every 20 seconds and
+    exits printing `<handle> <sum>` when one shows a dialog, or `stale <handle>` when it cannot read one (take the
+    handles again from `orca terminal list`). After answering a real dialog, run
+    `bash <this skill's folder>/watch-dialogs.sh <state file> --answered <handle>` so the same dialog is seen when it
+    comes back; text that only looked like one stays quiet. Start the watcher again after each exit, and whenever a
+    child starts, is relaunched or sends its final report (TaskStop the old one first); stop it once no child runs.
+  - **Each board run** also reads every such child's screen itself, since the watcher only knows a few dialog words.
+  Either way it reads the bottom of the child's screen (`orca terminal read --screen --terminal <handle> --limit 30`);
+  a usage-limit message there is handled as below. For a dialog waiting on an answer, it decides as the user would:
   - **Yes** when the action stays inside the child's item and what this skill allows, and the user's word (a hold, a
     stop) does not hold it back: work in its worktree or the repo, local builds, tests and installs, its feature branch,
-    PR and test workflows on GitHub, its isolated test backends and test accounts, trusting its own worktree; and an
-    action the user allowed for that child when its dialog comes back. Send the number the screen shows for the plain
+    PR and test workflows on GitHub, its isolated test backends and test accounts; the steps of a stop the user asked
+    for (cancelling its runs, stopping its agents, deleting its jobs); at start, trusting its own worktree, the
+    permission mode the orchestrator itself runs in, and a project MCP server the orchestrator's own session uses; and
+    an action the user allowed for that child when its dialog comes back. Send the number the screen shows for the plain
     yes (not "don't ask again"): `orca terminal send --terminal <handle> --text "<n>"`.
   - **No** for anything else: production, secrets, real accounts, the user's own apps or services, deleting outside the
     worktree, pushing to the base, a release or deploy, or anything this skill forbids. Send Escape
     (`--text $'\x1b'`), tell the child why with `SendMessage`, and when only the user can give it, ask them (Asking the
-    user; the recommendation is no).
+    user; the recommendation is no). On a dialog at start, no or Escape exits the child's session: ask the user
+    instead of answering.
   It reads the screen again just before sending, and after it: a dialog still showing with that option selected gets
   Enter (`--text "" --enter`). It lists each "no" with the child's decisions. Only a dialog: it never types into a
   child's prompt line.
@@ -549,7 +563,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - At most 20 subagents run at once in a session (Claude Code's limit). A spawn refused with "Concurrent subagent limit
   reached" is not retried: that work waits and starts when one ends.
 - Tasks that share a file never run at the same time.
-- **Waiting.** Never `sleep`, in the foreground or in a loop. Wait for something that happens (a run ends, CI ends, an
+- **Waiting.** Never `sleep`, in the foreground or in a loop (the dialog watcher's own loop, a background command, is
+  the one exception). Wait for something that happens (a run ends, CI ends, an
   agent or a child reports) with a background command that ends when it does (`gh run watch`, `gh pr checks --watch`)
   or with the message itself. Wait for a time ("check again in 5 minutes", a run that has not appeared yet) with a
   one-shot CronCreate job whose prompt names what to check; a GitHub run a tester could not find gets a fresh tester
