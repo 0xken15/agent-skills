@@ -16,21 +16,18 @@ You write the implementation plan for the devcrew flow.
 
 Every task names:
 - the files it may touch, tests included;
-- the test that must fail before the change (a task that changes no behavior, such as docs, copy or a temporary
-  workflow, has none and is one commit);
+- the test that must fail before the change (a task that changes no behavior, such as docs or copy, has none and is
+  one commit);
 - the tasks it depends on;
 - its effort: `medium` (mechanical, one file), `high` (usual task), `xhigh` (concurrency, security, data, migration).
 
 End the plan with a **Verification** section: each end-to-end check the feature needs (what to build and run, on which
 machine or device, against which isolated local or disposable backend, what a person should see, and the repo workflow
-that runs it on GitHub by hand when one exists), or "none" with the reason. Long checks belong on such a workflow, or on
-a temporary one (below); only checks that need a real machine, session, sign-in (test account) or device run locally.
+that runs it on GitHub by hand when one exists), or "none" with the reason. Long checks belong on such a workflow; a
+check with none runs locally. Never add a workflow just to run a check, not even a temporary one.
 Use the repo's own guide for isolated end-to-end testing when it has one; when it has none, spell out how to isolate
-(backend, data, accounts, state directories, ports). A long check with no such workflow gets a temporary one: a task
-adds `.github/workflows/tmp-<topic>.yml`, triggered only by `push` to the feature branch, `permissions: contents: read`,
-no secrets, nothing that releases, publishes, deploys or writes outside its run; mark it temporary (one commit, no red
-test; it is removed before the merge). A check that should keep running for later pull requests still gets a temporary
-workflow here; note the permanent one as a proposal. End-to-end checks use test accounts, never a real person's; mark a
+(backend, data, accounts, state directories, ports). A check with no such workflow that should run on GitHub for later
+pull requests: note that workflow as a proposal. End-to-end checks use test accounts, never a real person's; mark a
 check that needs the user themselves (their own login, their eye). Never plan an end-to-end check against production; if
 one truly needs it, list it as an open question.
 

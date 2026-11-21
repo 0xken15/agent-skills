@@ -75,7 +75,6 @@ Every dispatch's `description` starts with its place in the run, so the running 
 | Plan; plan update | `P2 plan`; `P2 plan-update` |
 | Task 5; sent back the first time | `P3 T5 <few words>`; `P3 T5 retry#1` |
 | Final review (small diff); one area of a large diff; fixes of that area's findings; fix-diff review | `P4 review`; `P4 review <area>`; `P4 review-fix <area>` (`P4 review-fix seams` for findings across areas); `P4 fix-review` |
-| Removing the temporary workflow | `P4 tmp-wf-remove` |
 | Tester of one check group; fix of a failed check; rerun | `P4 e2e <group>`; `P4 e2e-fix#1`; `P4 e2e-rerun#1 <group>` |
 | CI fix; tester rerun after it | `P5 ci-fix#1`; `P5 e2e-rerun#1 <group>` |
 | Rebase (phase 4, 5 or 6); tester rerun after it | `P4 rebase#1`, `P5 rebase#1` or `P6 rebase#1`; `P4 e2e-rerun#1 <group>` (same phase) |
@@ -85,7 +84,7 @@ Every dispatch's `description` starts with its place in the run, so the running 
 | Agent (`subagent_type`) | Model, default effort | Phase |
 |---|---|---|
 | `devcrew-planner` | Opus, `high` | 2: write the plan (a hard plan: `effort: "xhigh"`); update it after the orchestrator's answers (`effort: "high"`) |
-| `devcrew-implementer` | Opus, `high` | 3: one task; a task sent back; 4: fixes of one area's review findings, fix of a failed tester check, removing the temporary workflow; 5: CI fixes; 4-6: a rebase |
+| `devcrew-implementer` | Opus, `high` | 3: one task; a task sent back; 4: fixes of one area's review findings, fix of a failed tester check; 5: CI fixes; 4-6: a rebase |
 | `devcrew-reviewer` | Opus, `xhigh` | 4: final review and fix of the whole branch (small diff), or find-only review of one area (large diff) |
 | `devcrew-fix-reviewer` | Opus, `high` | 4: review of the fix diff only |
 | `devcrew-tester` | Opus, `high` | 4: one per check group, end-to-end and required local checks on the final head; 4-6: reruns of a failed or affected check |
@@ -146,23 +145,20 @@ uses the planner's own `high`; the planner always runs on Opus. The status line 
 plan header and its handoff), it names devcrew phase 3 instead. It saves the plan at the docs path and commits nothing.
 Every task names:
 - the files it may touch, tests included;
-- the test that must fail before the change (a task that changes no behavior, such as docs, copy or a temporary
-  workflow, has none and is one commit);
+- the test that must fail before the change (a task that changes no behavior, such as docs or copy, has none and is
+  one commit);
 - the tasks it depends on;
 - its effort, from the table above.
 
 The plan ends with a **Verification** section: each end-to-end check the feature needs (what to build and run, on which
 machine or device, against which isolated local or disposable backend, what a person should see, and the repo workflow
-that runs it on GitHub when one exists), or "none" with the reason. End-to-end runs never touch production: no
+that runs it on GitHub by hand when one exists), or "none" with the reason. End-to-end runs never touch production: no
 production backend, database, secrets or real accounts, and never the services or apps the user is using; the tester's
 definition holds the isolation rules.
 
-A long check with no workflow to run it on GitHub gets a **temporary workflow**: a task adds
-`.github/workflows/tmp-<topic>.yml`, triggered only by `push` to the feature branch (`workflow_dispatch` cannot start a
-file that is not on the base branch yet), with `permissions: contents: read`, no secrets, and nothing that releases,
-publishes, deploys or writes outside its own run. The plan marks it temporary; it is one commit, with no red test. A
-permanent workflow, for checks that should keep running on later pull requests, is never part of this branch: the
-final report proposes it.
+A long check with no workflow to run it on GitHub by hand runs locally, like the other local checks. No workflow is
+added for it in this branch, not even a temporary one. A check with no such workflow that should run on GitHub for
+later pull requests: the plan notes that workflow as a proposal, and the final report carries it.
 
 No waves: phase 3 schedules by each task's files and dependencies.
 
@@ -229,16 +225,14 @@ does not run (the repo's AGENTS.md, CLAUDE.md or CONTRIBUTING names them). Skip 
 says "none" and the branch touches no such area. A check only the user can do goes to the orchestrator at once, which
 asks the user (Orchestrator and children); their result goes in the PR body.
 
-Long checks run on GitHub, not on the user's machine: a check the repo can run by hand as a GitHub workflow
-(`workflow_dispatch`, often named in its docs as "Run workflow") goes there, and so does one the plan gave a temporary
-workflow; the rest run locally at the same time. The tester's definition holds the rules.
+Where each check runs: one the repo can run by hand as a GitHub workflow (`workflow_dispatch`, often named in its
+docs as "Run workflow") runs there, not on the user's machine, however long; the rest run locally at the same time.
+The tester's definition holds the rules.
 
 **CI runs beside the testers.** Before they start, the main session opens the pull request as phase 5 says (fetch,
 rebase if it conflicts, push, ready PR, with the `hold` label when the repo uses one), so CI's full suites and the
 testers run at the same time. When fixes land it pushes once no other fix is still running, then the reruns start; every
-brief carries the pushed head SHA. A temporary workflow holds the PR back: push the branch alone and open the PR once
-the file is removed, unless a plain branch push already starts the repo's CI, in which case open it now. A CI failure
-while the testers run is handled as phase 5 says.
+brief carries the pushed head SHA. A CI failure while the testers run is handled as phase 5 says.
 
 From here on, every fix (a tester failure, a CI failure) goes to a `devcrew-implementer` in
 its own worktree and lands as in phase 3, so fixes that arrive together never share a checkout; two fixes that touch
@@ -260,16 +254,13 @@ When a tester reports, the main session removes its worktree.
 A failure goes to a `devcrew-implementer` with that tester's evidence; then a fresh tester for that group reruns only
 the failed checks, plus any passed check in another group whose area the fix touched (a check's area: the components it
 builds or runs). A check still running on an older head finishes; it reruns only when a fix since then touched its area.
+A check a tester reports not run (cut off before it ended) reruns once in a fresh tester for its group; not run again,
+tell the orchestrator.
 The other groups' evidence stands. The main session puts every group's evidence in the PR body (`gh pr edit`) before the
 merge.
 
-A temporary workflow runs on each of those pushes. Once every group passes, a `devcrew-implementer` removes the
-file in one commit (`effort: "medium"`), and the main session checks `git diff <base>...HEAD -- .github/workflows/`
-shows no `tmp-` file before the PR opens (or, when it is already open, before the merge). A later rerun of that check
-runs locally.
-
-**5. Full suites on CI.** Usually the PR is open since the testers started (phase 4). If not (no testers, or a temporary
-workflow held it back), open it now: fetch the base first; if the branch conflicts with it, rebase (below) before the
+**5. Full suites on CI.** Usually the PR is open since the testers started (phase 4). If not (no testers), open it
+now: fetch the base first; if the branch conflicts with it, rebase (below) before the
 push, since CI does not start on a conflicting PR. Push the branch and open the pull request, ready rather than draft
 where CI skips drafts, with the `hold` label while CI runs when the repo uses one. CI runs the full suites once per
 pushed head. Right after a push, `gh pr checks` can still show none or the old head's: once
@@ -284,8 +275,8 @@ to get it green. A failure that is also red on the base (the same job fails in t
 `gh run list --branch <base>`) is not this branch's: fix nothing and send the orchestrator both run links; the merge
 waits, and the orchestrator asks the user, recommending holding the merge.
 
-**6. Merge on green.** Never with a `tmp-` workflow in the diff. When the required checks pass on the head, every tester
-group has passed, every check held for the user has passed, the user has not held the merge, and GitHub shows the PR
+**6. Merge on green.** When the required checks pass on the head, every tester group has passed (a check the user
+dropped aside), every check held for the user has passed, the user has not held the merge, and GitHub shows the PR
 mergeable with no conflict, remove `hold` (if set; when that starts new runs, wait for them) and merge at once, even if
 the base moved, with the merge command the repo's docs name, or else
 `gh pr merge <PR> --squash --match-head-commit <head>` (`--admin` only when the repo's docs call for it). No new
@@ -306,7 +297,8 @@ starts, with the PR link once the PR is up, and with the merged PR when done. Th
 release carries it, since the child is gone by then.
 
 Final report: what changed, the tests and the testers' evidence, the review findings and their fixes, the CI result, the
-PR link and the merge, every decision the orchestrator gave (so the user can reverse any), and the time each part
+PR link and the merge, the workflows the plan proposed (for checks that had none), every decision the orchestrator gave
+(so the user can reverse any), and the time each part
 took: brainstorm and spec, plan (a small item: the design), implementation, review, testers, CI, merge, and apart from
 them the time spent waiting for the orchestrator's answers. To have it, the main session posts a
 status line in its own chat with the UTC time (`date -u +%H:%M`) when each phase starts and when it starts and stops
@@ -340,6 +332,9 @@ Stop and ask the orchestrator only when the run cannot go on without an answer:
 - the same task fails after two rounds back to a `devcrew-implementer`;
 - a tester check still fails after two fixes;
 - a check can only run against production;
+- a check can run on no machine devcrew can reach nor on a workflow the repo runs by hand (it needs another system,
+  runner or device): the orchestrator asks the user, who runs it themselves (then it is a check held for the user),
+  drops it (the PR body says so) or holds the merge;
 - CI is still red after two fix pushes;
 - the PR still conflicts after two rebases, or a conflict needs a choice between two behaviors.
 
@@ -533,8 +528,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   starts, a new PR, a CI result and the merge get no message of their own. Its other messages are the ones this skill
   names: questions, a go asked for or given back, and notices the orchestrator acts on. Each message is short, in the
   user's language, with a first line that stands alone.
-- Before a heavy workflow starts (the dispatch of a tester whose group runs on GitHub, or any push while a `tmp-`
-  workflow is in the branch, since each push starts it), and before a tester uses a shared test machine or device, it
+- Before a heavy workflow starts (the dispatch of a tester whose group runs on GitHub), and before a tester uses a
+  shared test machine or device, it
   asks the orchestrator and waits for the go; it gives it back when that run ends. A run the tester could not find
   keeps the turn until the rerun tester finds it or reports it missing. Local testers and the PR's own CI need no go.
 - **Resuming** (any message or job that wakes it after a usage limit, a stop or a crash, or a fresh session in its
@@ -543,7 +538,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   1. A main checkout left mid-rebase, mid-cherry-pick or with edits by a cut-off agent: `git rebase --abort` (or
      `git cherry-pick --abort`), then `git stash push -u -m "devcrew: <label> cut off"` for leftover edits.
   2. Remove each cut-off agent's worktree and start its work again from the head under the same label (not a retry: it
-     does not count toward the two rounds).
+     does not count toward the two rounds). A new tester's brief says the earlier one was cut off, so it clears what
+     that one left in its slot.
   3. A cut-off tester of a GitHub group: ask for the turn again first when the child gave it back or lost it. After a
      stop (its run was cancelled), the new tester starts the run afresh; otherwise its brief is that of a run not found
      earlier (workflow, head SHA, first start time), so it finds the old run and starts none.
@@ -555,8 +551,6 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   phase 6. Release and deploy only when the user asks.
 - No per-task review. No full suite locally: only the tests of what changed, plus the repo's required checks once in
   phase 4.
-- A temporary workflow is named `tmp-<topic>.yml`, triggers only on `push` to the feature branch, and is gone from the
-  diff before the merge (before the PR opens when the PR waited for it).
 - On GitHub, run only workflows that test. Never one that releases, publishes, deploys or writes outside its own
   run, and at most one heavy workflow that devcrew starts at a time, across every child (the PR's own CI does not
   count).
@@ -600,7 +594,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 | "Quicker to test this against prod" | Never. Isolated local or disposable backend, separate state; prod-only checks go to the user. |
 | "`sleep 300`, then check again" | Never `sleep`. A one-shot CronCreate job for a time; a background command for an event. |
 | "Run the full suite to be safe" | Only the tests of what changed locally; full suites once, on CI, at the end. |
-| "Run the hour-long end-to-end suite locally" | It has a GitHub workflow: push the branch, the tester runs it there. |
-| "The temporary workflow is handy, keep it" | Remove it before the merge. A permanent workflow is never in this branch; the final report proposes it. |
-| "Use GitHub for each task's red/green test" | No. Task tests stay local; GitHub is for the long checks in phase 4. |
+| "Run the hour-long end-to-end suite locally, though a workflow runs it by hand" | Push the branch; the tester runs it on GitHub. |
+| "Add a workflow so this long check runs on GitHub" | Not in this branch, not even a temporary one. It runs locally; when later PRs should run it, the final report proposes the workflow. |
+| "Use GitHub for each task's red/green test" | No. Task tests stay local; GitHub is for the phase 4 checks a workflow runs by hand. |
 | "Sonnet is enough for this small task" | Code and review are Opus only. Sonnet and Haiku are never used. |

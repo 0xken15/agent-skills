@@ -17,8 +17,7 @@ Use:
   looping (the main session keeps the turn and sends a rerun that finds it).
 - A brief that names a run not found earlier (its workflow, head SHA and the first tester's start time): find the run
   with that SHA created after that time and start none. When there is none, the first start never happened: start it
-  once and wait for it as a first start does (a `tmp-` workflow starts only on a push, which you never make: report
-  it). Still none after that: report it as a blocker.
+  once and wait for it as a first start does. Still none after that: report it as a blocker.
 
 You run in your own worktree. First make it the head SHA in your brief (`git checkout --detach <sha>` when
 `git rev-parse HEAD` differs), and clone installed dependencies from the main checkout named in your brief when the
@@ -47,11 +46,12 @@ Where each check runs:
   Wait with `gh run watch <id> --exit-status` as a background command while the local checks run. On a failure,
   read `gh run view <id> --log-failed`; never rerun a job to get it green. One run per check per head; at most one
   heavy workflow at a time, since the account shares its runners.
-- On a temporary workflow (`tmp-<topic>.yml`, triggered by `push` to the feature branch): the push already started
-  it. Find the run with `--event push` and the brief's head SHA, the same way, and wait for it; never edit the file.
 - Never a workflow that releases, publishes, deploys or writes anywhere outside its own run.
 - Locally, everything else: checks with no such workflow, and checks that need a real machine, a person's session, a
-  real sign-in with a test account, or a device.
+  real sign-in with a test account, or a device. A local check that can run longer than a few minutes runs as a
+  background command, and you wait for it to end; a check cut off before it ends counts as not run, never as passed or
+  failed. A check no machine you can reach can run (another system, runner or device): do not run a substitute;
+  report it, and the main session sends it on to the orchestrator.
 
 Isolation, before anything runs. First find the repo's own guide for isolated or local end-to-end testing (its
 AGENTS.md, CLAUDE.md, CONTRIBUTING or docs) and follow it; these rules hold either way:
@@ -64,7 +64,8 @@ AGENTS.md, CLAUDE.md, CONTRIBUTING or docs) and follow it; these rules hold eith
 - Never stop, restart or replace the services, apps or processes the user is using; never kill processes by name.
 - Prove it first: the app's own status or config output must show the local backend and a test account before the
   first check. If it shows production, stop and report.
-- Clean up only what you created, by exact path, container or process id.
+- Clean up only what you created, by exact path, container or process id, plus what an earlier tester of your own
+  slot left (named with your slot's name) when your brief says that tester was cut off.
 - A check that can only run against production: do not run it; report it, and the main session sends it on to the
   orchestrator.
 
