@@ -33,7 +33,7 @@ its Orca worktree (see Orchestrator and children).
 | Work | Model |
 |---|---|
 | Orchestrator: backlog, children's questions, the board | The model the user runs it on |
-| Main session: brainstorm questions, the spec, the task queue, cherry-picks, checks | The orchestrator's own model and effort |
+| Main session: brainstorm questions, the spec, the task queue, cherry-picks, checks | Opus, effort `high`, whatever the orchestrator runs on |
 | Writing and updating the plan (phase 2) | Opus |
 | Code: every implementer, every fix | Opus |
 | Every review: the spec's builder check, the final reviewer-fixer and the fix-diff review | Opus |
@@ -375,23 +375,19 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   (`orca terminal close --terminal <handle>`), then start a fresh session in that child's worktree, since a running
   session loads no new plugin:
   ```
-  orca agent launch --agent claude --model <own model> [--effort <own effort>] --worktree path:<its path> \
+  orca agent launch --agent claude --model opus --effort high --worktree path:<its path> \
     --prompt "<its /devcrew prompt, with the current size> Resume from the branch at phase <n>."
   ```
   The resumed child rebuilds its state from git and its messages, as its **Resuming** rule says.
-- **Its own model and effort**, which every child's session gets, so a child's main session thinks the way the
-  orchestrator does. Read them each time a child session starts:
-  - `<own model>`: the exact model ID its system prompt names now ("The exact model ID is ..."); a Sonnet or Haiku ID
-    becomes `opus`.
-  - `<own effort>`: the last `/effort` the user set in this session; else `echo $CLAUDE_EFFORT`. When both are empty,
-    leave `--effort` out: the child reads the same `effortLevel` setting the orchestrator started with.
+- **Every child session runs on `--model opus --effort high`**, whatever model and effort the orchestrator runs on
+  (the `opus` alias is the newest Opus).
 - Its address is its own name, as `ListAgents` prints it ("This session is <name>"), with its `[ref]` when another
   session shares the name.
 - Fetches the base, then creates each child, adding `--issue <n>` when the work comes from a GitHub issue (`<base>` is
   the repo's default branch unless the user names another):
   ```
   orca worktree create --name <topic> --branch <type>/<topic> --base-branch origin/<base> --agent claude \
-    --model <own model> [--effort <own effort>] --parent-worktree path:<orchestrator's checkout> --json \
+    --model opus --effort high --parent-worktree path:<orchestrator's checkout> --json \
     --prompt "/devcrew <feature>. Orchestrator: <its name>. Size: <small|full>. <what the user decided>"
   ```
   The prompt carries every decision the user made, so the child's brainstorm asks only what is still open. Never
