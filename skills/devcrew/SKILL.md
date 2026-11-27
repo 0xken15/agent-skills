@@ -1,6 +1,12 @@
 ---
 name: devcrew
 description: Use when the user asks for the devcrew flow by name, or types /devcrew
+hooks:
+  PreToolUse:
+    - matcher: "AskUserQuestion"
+      hooks:
+        - type: command
+          command: 'echo "devcrew: no question popup. The orchestrator asks the user in a plain chat message (context, question, recommendation, a 5-minute job); a child asks the orchestrator with SendMessage." >&2; exit 2'
 ---
 
 # devcrew
@@ -351,7 +357,8 @@ refuses the merge, it tells the orchestrator and leaves the PR as it is.
 ## Orchestrator and children
 
 `/devcrew` with no orchestrator named in its prompt makes the session the **orchestrator** (first it checks
-`orca worktree list` for children under its checkout: when there are any, it was **restarted**, below); one that names
+`orca worktree list` for children under its checkout: when there are any and this conversation has not been their
+orchestrator, it was **restarted**, below; when it has, it is back in a new process, below); one that names
 an orchestrator makes it a **child**. The user works only in the orchestrator and does not watch the child sessions. The
 orchestrator acts as their PM, and the two talk with `SendMessage`, never through the child's prompt.
 
@@ -377,9 +384,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   reported a missing superpowers skill, once it is installed; and on the user's word that they switched the Claude
   account in Orca, every running child (not a replaced or stopped one; such a child told to resume later is moved
   first when the account changed since it last ran). The user moves the orchestrator itself first, since it cannot
-  work on an account at its limit; on its first turn in the new process it recreates every job it had (its CronList
-  is empty): the board job and the dialog watcher unless the user stopped everything, and each 5-minute, usage-limit,
-  gate and first-message job still due; then it moves the children, one at a time:
+  work on an account at its limit; back in a new process (below), it moves the children, one at a time:
   1. Its session id: the one its first message gave; missing, the newest `*.jsonl` directly in its transcript folder,
      `"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/<its worktree path, every character but a letter or digit as ->"`
      (Orca's accounts share one `projects` folder, so the new account resumes a session the old one wrote).
@@ -396,13 +401,19 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   4. Start it again in a new terminal of its worktree, which runs on the account Orca has selected:
      ```
      orca terminal create --worktree path:<its path> --title <its name> --json --command \
-       'claude ${ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR:+"--plugin-dir=$ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR"} <permission flag> --model opus --effort high --resume <session id> "devcrew: moved (orchestrator <its name>); go on as your Resuming rule says."'
+       'claude ${ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR:+"--plugin-dir=$ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR"} <permission flag> --disallowedTools AskUserQuestion --model opus --effort high --resume <session id> "devcrew: moved (orchestrator <its name>); go on as your Resuming rule says."'
      ```
-     The `--command` text stays on one line: it is typed into the new terminal's shell.
+     The `--command` text stays on one line: it is typed into the new terminal's shell. `--disallowedTools` takes
+     every word after it, so another flag must follow it.
   5. Keep the new handle from the JSON and start the dialog watcher again with every current handle, so a dialog the
      new process shows at start is caught.
   The child keeps its whole conversation and its name, so messages still reach it; its **Resuming** rule restarts the
   agents, waits and jobs the old process lost.
+- **Back in a new process** (a move, a crash, Orca reopening it, a resume): on its first turn, when its CronList shows
+  none of the jobs it had, the orchestrator invokes this skill again with the Skill tool only to load its hook that
+  refuses the question popup (a new process loses it). That is neither a new orchestrator nor **Restarted**: no start
+  checks, no messages to the children. Then it recreates every job it had: the board job and the dialog watcher unless
+  the user stopped everything, and each 5-minute, usage-limit, gate and first-message job still due.
 - **Every child session runs on `--model opus --effort high`**, whatever model and effort the orchestrator runs on
   (the `opus` alias is the newest Opus).
 - Its address is its own name, as `ListAgents` prints it ("This session is <name>"), with its `[ref]` when another
@@ -411,7 +422,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   the repo's default branch unless the user names another):
   ```
   orca worktree create --name <topic> --branch <type>/<topic> --base-branch origin/<base> --agent claude \
-    --model opus --effort high --parent-worktree path:<orchestrator's checkout> --json \
+    --surface terminal --model opus --effort high --parent-worktree path:<orchestrator's checkout> --json \
     --prompt "/devcrew <feature>. Orchestrator: <its name>. Size: <small|full>. <what the user decided>"
   ```
   The prompt carries every decision the user made, so the child's brainstorm asks only what is still open. Never
@@ -441,17 +452,17 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   the child at once that the question waits on the user, and again when a 5-minute job acts on it. While it
   waits, the child keeps running; only the merge waits for a check that needs the user. A check that needs the user
   themselves is done by the user, never by a tester.
-- **Asking the user.** A plain chat message, never the AskUserQuestion tool (it blocks their screen): the context, the
-  question, and its recommendation. Questions pending at the same time go in one numbered message, each with its own
-  recommendation. With each question it creates a one-shot CronCreate job 5 minutes out whose prompt is "devcrew
-  orchestrator: if the user has not answered <question>, act on its recommendation."; an answer deletes that job
-  (CronDelete). When it fires, the orchestrator acts on the recommendation,
-  tells the user it did, and lists it with the child's decisions; an answer that comes later still wins, and when the
-  work has already merged, the change goes to a new child. A recommendation never runs against production, never uses a
-  secret or access the user has not given, and never merges before phase 6's conditions hold. For a missing check it
-  recommends holding the merge; for a part of the work, leaving it out of this branch; after two failed rounds, holding
-  the merge for one more round (one more fix push or tester rerun) with fresh evidence: green, it merges; red again,
-  the merge waits for the user. A held merge shows on each board run (even unchanged), with no new 5-minute job.
+- **Asking the user.** A plain chat message, never the AskUserQuestion tool (it blocks their screen; this skill's hook
+  refuses it): the context, the question, and its recommendation. Questions pending at the same time go in one numbered
+  message, each with its own recommendation. With each question it creates a one-shot CronCreate job 5 minutes out whose
+  prompt is "devcrew orchestrator: if the user has not answered <question>, act on its recommendation."; an answer
+  deletes that job (CronDelete). When it fires, the orchestrator acts on the recommendation, tells the user it did, and
+  lists it with the child's decisions; an answer that comes later still wins, and when the work has already merged, the
+  change goes to a new child. A recommendation never runs against production, never uses a secret or access the user has
+  not given, and never merges before phase 6's conditions hold. For a missing check it recommends holding the merge; for
+  a part of the work, leaving it out of this branch; after two failed rounds, holding the merge for one more round (one
+  more fix push or tester rerun) with fresh evidence: green, it merges; red again, the merge waits for the user. A held
+  merge shows on each board run (even unchanged), with no new 5-minute job.
 - **The user's word on running work** (hold merges, a cap, stop one item) goes at once to every running child it
   concerns, and into the prompt of children started later; it overrides phase 6. A child answers a hold with "held" or
   "merged <SHA>". A merge the user held waits for their word: never asked with a 5-minute job, never acted on by one.
@@ -546,7 +557,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   it stopped only when that child has sent nothing for 45 minutes (its 30-minute report can land late) and is not
   waiting on an answer (a held merge, a question to the orchestrator or the user): one `SendMessage` asks where it
   stands; no answer by the next board run: `orca terminal read --screen --terminal <handle>`, then it resumes the
-  child or tells the user. A child stopped by a usage limit (the limit's message, read on its screen, gives the reset
+  child or tells the user; a child whose process ended is restarted with steps 1 to 5 of Move a child, never a bare
+  `claude --resume`. A child stopped by a usage limit (the limit's message, read on its screen, gives the reset
   time) is resumed by a one-shot CronCreate job just after that time, which sends it "continue"; when the user says
   they switched to another account since, it is moved (Move a child) at once instead.
 - Keeps the backlog: every work item the user gives, in their order. No fixed cap on children: it starts the next
