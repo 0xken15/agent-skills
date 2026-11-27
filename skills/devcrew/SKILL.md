@@ -371,14 +371,27 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
     into Claude Code; missing: tell the user to update Claude Code), its own CronCreate, CronDelete, SendMessage and
     ListAgents tools, `orca --help` and `gh auth status`. Anything missing that it cannot install: tell the user the
     command and stop.
-- A child reports a missing superpowers skill: install or update as above, close the old child's terminal
-  (`orca terminal close --terminal <handle>`), then start a fresh session in that child's worktree, since a running
-  session loads no new plugin:
-  ```
-  orca agent launch --agent claude --model opus --effort high --worktree path:<its path> \
-    --prompt "<its /devcrew prompt, with the current size> Resume from the branch at phase <n>."
-  ```
-  The resumed child rebuilds its state from git and its messages, as its **Resuming** rule says.
+- A child reports a missing superpowers skill: install or update as above, then **move the child** (below), since a
+  running session loads no new plugin.
+- **Move a child** to a new process of the same conversation, never to a fresh session with a handoff: after a
+  plugin install or update, and when the user switches the Claude account (in Orca) for the running children, one
+  child at a time (a replaced child is not moved):
+  1. Its session id: the one its first message gave; missing, the newest `*.jsonl` directly in
+     `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/<its worktree path, each / and . as ->/` (Orca's accounts share one
+     `projects` folder, so the new account resumes a session the old one wrote).
+  2. `orca terminal close --terminal <handle>` (its running agents, background commands and jobs end with it).
+  3. Start it again in a new terminal of its worktree, which runs on the account Orca has selected:
+     ```
+     orca terminal create --worktree path:<its path> --title <its name> --json --command \
+       'claude ${ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR:+"--plugin-dir=$ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR"} --model opus --effort high --resume <session id> "devcrew: moved; go on as your Resuming rule says."'
+     ```
+     The `--command` text stays on one line: it is typed into the new terminal's shell.
+  4. Keep the new handle from the JSON and read its screen once for a dialog. After the last child, restart the
+     dialog watcher with the new handles.
+  The child keeps its whole conversation and its name, so messages still reach it; its **Resuming** rule restarts the
+  agents and jobs the old process lost. The orchestrator's own session is the user's to move. When it comes back in a new process (CronList shows
+  none of its jobs), it creates the board job, starts the dialog watcher and recreates the 5-minute job of each open
+  question.
 - **Every child session runs on `--model opus --effort high`**, whatever model and effort the orchestrator runs on
   (the `opus` alias is the newest Opus).
 - Its address is its own name, as `ListAgents` prints it ("This session is <name>"), with its `[ref]` when another
@@ -523,7 +536,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   waiting on an answer (a held merge, a question to the orchestrator or the user): one `SendMessage` asks where it
   stands; no answer by the next board run: `orca terminal read --screen --terminal <handle>`, then it resumes the
   child or tells the user. A child stopped by a usage limit (the limit's message, read on its screen, gives the reset
-  time) is resumed by a one-shot CronCreate job just after that time, which sends it "continue".
+  time) is resumed by a one-shot CronCreate job just after that time, which sends it "continue"; when the user has
+  switched to another account since, it is moved (Move a child) at once instead.
 - Keeps the backlog: every work item the user gives, in their order. No fixed cap on children: it starts the next
   backlog item at once, without asking the user, while the machine gate is open and no child is stopped by a usage limit
   (until that child runs again); one child per gate check, so the next waits for the next check (a child's first
@@ -543,7 +557,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 
 **Child** (its prompt names an orchestrator).
 - Its first message to the orchestrator confirms that the superpowers skills, the devcrew agents, the `run` skill and
-  the CronCreate, CronDelete and TaskStop tools are present.
+  the CronCreate, CronDelete and TaskStop tools are present, and gives its session id (`echo $CLAUDE_CODE_SESSION_ID`).
 - A superpowers skill this flow names is missing: stop and tell the orchestrator; never run that step from memory.
 - The orchestrator stands in for the user everywhere in this skill and its sub-skills: the brainstorm's questions, the
   spec's approval, the plan's open questions and go, and every stop condition (it passes on to the user only what they
@@ -622,6 +636,7 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 | "The new item replaces that child's, but it is nearly done; let it finish" | Stop it now. Work the user no longer wants still costs review, CI and a merge; its branch stays if they want it back. |
 | "The user's follow-up is a new item, start a child" | Compare it with every running item first; a change to one goes to that child. |
 | "Ask the user whether the new item replaces the old one" | Decide by the newer word and tell them in a line. Ask only when their words fit both readings, and tell that child to hold meanwhile. |
+| "New account: start each child fresh with a handoff" | Move it: `--resume` its session in a new terminal, so it keeps its whole conversation. |
 | "This item is tiny, the orchestrator can just do it" | Every item gets its own child session. The orchestrator is only the PM. |
 | "Should I continue with the next task?" | The plan's go already said yes. Post a status line and continue. |
 | "CI is green, should I merge?" | Yes, when phase 6's conditions hold. Merge, then report. |
