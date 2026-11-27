@@ -373,25 +373,36 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
     command and stop.
 - A child reports a missing superpowers skill: install or update as above, then **move the child** (below), since a
   running session loads no new plugin.
-- **Move a child** to a new process of the same conversation, never to a fresh session with a handoff: after a
-  plugin install or update, and when the user switches the Claude account (in Orca) for the running children, one
-  child at a time (a replaced child is not moved):
-  1. Its session id: the one its first message gave; missing, the newest `*.jsonl` directly in
-     `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/<its worktree path, each / and . as ->/` (Orca's accounts share one
-     `projects` folder, so the new account resumes a session the old one wrote).
-  2. `orca terminal close --terminal <handle>` (its running agents, background commands and jobs end with it).
-  3. Start it again in a new terminal of its worktree, which runs on the account Orca has selected:
+- **Move a child** to a new process of the same conversation, never to a fresh session with a handoff: the child that
+  reported a missing superpowers skill, once it is installed; and on the user's word that they switched the Claude
+  account in Orca, every running child (not a replaced or stopped one; such a child told to resume later is moved
+  first when the account changed since it last ran). The user moves the orchestrator itself first, since it cannot
+  work on an account at its limit; on its first turn in the new process it recreates every job it had (its CronList
+  is empty): the board job and the dialog watcher unless the user stopped everything, and each 5-minute, usage-limit,
+  gate and first-message job still due; then it moves the children, one at a time:
+  1. Its session id: the one its first message gave; missing, the newest `*.jsonl` directly in its transcript folder,
+     `"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/<its worktree path, every character but a letter or digit as ->"`
+     (Orca's accounts share one `projects` folder, so the new account resumes a session the old one wrote).
+  2. Its process and permission flag (`--dangerously-skip-permissions` or `--permission-mode <mode>`), so the new
+     process runs in the same mode: the `claude` process whose working directory is its worktree,
+     ```
+     for p in $(pgrep -x claude); do [ "$(lsof -a -p $p -d cwd -Fn | sed -n 's/^n//p')" = "<its path>" ] && ps -o pid=,args= -p $p; done
+     ```
+     None found (the process already ended): the flag the orchestrator's other children run with.
+  3. Before the first child, TaskStop the dialog watcher. CronDelete the child's usage-limit job, then
+     `orca terminal close --terminal <handle>`; its running agents, background commands and jobs end with it. Check
+     with `kill -0 <pid>` that the process has ended (still alive: `kill <pid>`, check again): never two processes on
+     one session.
+  4. Start it again in a new terminal of its worktree, which runs on the account Orca has selected:
      ```
      orca terminal create --worktree path:<its path> --title <its name> --json --command \
-       'claude ${ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR:+"--plugin-dir=$ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR"} --model opus --effort high --resume <session id> "devcrew: moved; go on as your Resuming rule says."'
+       'claude ${ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR:+"--plugin-dir=$ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR"} <permission flag> --model opus --effort high --resume <session id> "devcrew: moved (orchestrator <its name>); go on as your Resuming rule says."'
      ```
      The `--command` text stays on one line: it is typed into the new terminal's shell.
-  4. Keep the new handle from the JSON and read its screen once for a dialog. After the last child, restart the
-     dialog watcher with the new handles.
+  5. Keep the new handle from the JSON and start the dialog watcher again with every current handle, so a dialog the
+     new process shows at start is caught.
   The child keeps its whole conversation and its name, so messages still reach it; its **Resuming** rule restarts the
-  agents and jobs the old process lost. The orchestrator's own session is the user's to move. When it comes back in a new process (CronList shows
-  none of its jobs), it creates the board job, starts the dialog watcher and recreates the 5-minute job of each open
-  question.
+  agents, waits and jobs the old process lost.
 - **Every child session runs on `--model opus --effort high`**, whatever model and effort the orchestrator runs on
   (the `opus` alias is the newest Opus).
 - Its address is its own name, as `ListAgents` prints it ("This session is <name>"), with its `[ref]` when another
@@ -536,8 +547,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   waiting on an answer (a held merge, a question to the orchestrator or the user): one `SendMessage` asks where it
   stands; no answer by the next board run: `orca terminal read --screen --terminal <handle>`, then it resumes the
   child or tells the user. A child stopped by a usage limit (the limit's message, read on its screen, gives the reset
-  time) is resumed by a one-shot CronCreate job just after that time, which sends it "continue"; when the user has
-  switched to another account since, it is moved (Move a child) at once instead.
+  time) is resumed by a one-shot CronCreate job just after that time, which sends it "continue"; when the user says
+  they switched to another account since, it is moved (Move a child) at once instead.
 - Keeps the backlog: every work item the user gives, in their order. No fixed cap on children: it starts the next
   backlog item at once, without asking the user, while the machine gate is open and no child is stopped by a usage limit
   (until that child runs again); one child per gate check, so the next waits for the next check (a child's first
@@ -596,7 +607,9 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   3. A cut-off tester of a GitHub group: ask for the turn again first when the child gave it back or lost it. After a
      stop (its run was cancelled), the new tester starts the run afresh; otherwise its brief is that of a run not found
      earlier (workflow, head SHA, first start time), so it finds the old run and starts none.
-  4. Create its 30-minute job unless one is set.
+  4. Create its 30-minute job unless one is set or this skill had it deleted (a merge held for the user, a replaced
+     item). After a move to a new process, also restart the waits and one-shot jobs its conversation shows were
+     pending (a `gh pr checks --watch`, a run-not-found recheck, a question's resend).
 
 ## Limits
 
