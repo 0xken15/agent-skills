@@ -431,13 +431,41 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - **The user's word on running work** (hold merges, a cap, stop one item) goes at once to every running child it
   concerns, and into the prompt of children started later; it overrides phase 6. A child answers a hold with "held" or
   "merged <SHA>". A merge the user held waits for their word: never asked with a 5-minute job, never acted on by one.
+- **Each new word against the running work.** Every new item, product rule or change of direction the user gives
+  (even with no item), and every child's spec when it approves it: the orchestrator compares what it is for with what
+  each running child and backlog item is for (by intent; shared files are the backlog rule below), and acts at once:
+  - **It replaces one** (the same need met another way, or the reason for it gone: the feature dropped, the problem
+    solved elsewhere): that child is **replaced**, however close it is to done. The message says "replaced by
+    <item>"; the child stops as a told child does (Stop), commits on its branch what it has uncommitted (a spec, a
+    plan), removes its task and tester worktrees and their branches, and answers "stopped" or "merged <SHA>"; its own
+    worktree, branch and PR stay. The new item's child starts on that answer: after "merged", the new item reverses
+    merged work (below); after "stopped", its prompt names the old branch so it reuses what fits. A replaced child
+    holds no item back. The board shows it as replaced; the silent-child check, the dialog watcher, the usage-limit
+    job, a go after Stop and a restart's resume all skip it. Once the new item merges, the orchestrator closes the old
+    PR, removes the old worktree (`orca worktree rm --worktree path:<path>`) and deletes its branch (`git branch -D`,
+    `git push origin --delete`) when a PR holds its last commit; a branch with no PR stays, and the line to the user
+    names it. When the new item is itself dropped first, it asks the user whether to bring the old one back
+    (recommending no): yes, it tells the old child to resume; no, or the 5-minute job, it cleans up as above.
+  - **It changes one** (the same goal with more, less or other behavior, or a rule that cuts across it): it goes to
+    that child as a change of item (Child, below), never to a new child; a child that answers "merged <SHA>" gets a
+    new child for the change, as with any change to merged work.
+  - **It is already inside one:** no new child; a detail it adds goes to that child as a change of item.
+  - **A running item is part of it:** that child takes the whole new item while its plan has no go yet; after the go,
+    the new item waits for that merge and builds on it.
+  - **It reverses merged work:** the new item's child removes what it replaces, in its own branch. A rule alone (no
+    item) that merged work breaks goes to the user, recommending no change until they give it as an item.
+  - A backlog item it replaces or changes is dropped or changed the same way, before it starts.
+
+  It tells the user in one line what it stopped, folded or changed, and lists it with the child's decisions so they
+  can reverse it. It asks first only when the user's words fit both readings (keep both or drop one); until the answer
+  or the 5-minute job, the child it may stop is told to hold, and the recommendation follows the newer word.
 - **Stop.** When the user says to stop everything: delete every job it made (first-message, 5-minute, gate, usage-limit;
   the board job and the dialog watcher once every child reports it stopped), tell each child to stop, and start nothing
   until the user says go. A told child stops its agents and background commands, cancels the GitHub runs it started
   (`gh run cancel <id>`) before giving back a shared turn, deletes its jobs, and reports where it stands. The child's
   own worktree, branch and PR stay, with `hold` when the repo uses one. On go: create the board job again, start the
-  dialog watcher, create a 5-minute job for each user question still open, and tell each child to resume (it resumes as
-  the child's **Resuming** rule says).
+  dialog watcher, create a 5-minute job for each user question still open, and tell each child that was not replaced
+  to resume (it resumes as the child's **Resuming** rule says).
 - **Restarted.** A new orchestrator session finds the children with `orca worktree list` (those under its checkout) and
   reads each one's prompt (`orca terminal read --terminal <handle>`, paging back with `--cursor` from the `oldestCursor`
   it returns) for what the user asked and the old orchestrator's name. When `ListAgents` shows another session by that
@@ -445,7 +473,8 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   screen (`--screen`) and answering any dialog there by the dialog rule, it sends each child, with
   `orca terminal send --terminal <handle> --text "<message>" --enter` (it does not know the child's session name yet),
   its own name, and asks for its original prompt when that was cut from the output, where it stands, what it waits for,
-  the orchestrator's decisions it got, the user's word it got (a hold, a cap, a stop), and any shared workflow or device
+  the orchestrator's decisions it got, the user's word it got (a hold, a cap, a stop, a replacement), and any shared
+  workflow or device
   it holds. A child then sends everything to the new name, and replaces its 30-minute job with one that names it. The
   new orchestrator creates the board job, starts the dialog watcher, rebuilds the queue of shared things from the
   answers, and asks the user only what it still cannot tell, including backlog items not yet started, which were in the
@@ -498,8 +527,9 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 - Keeps the backlog: every work item the user gives, in their order. No fixed cap on children: it starts the next
   backlog item at once, without asking the user, while the machine gate is open and no child is stopped by a usage limit
   (until that child runs again); one child per gate check, so the next waits for the next check (a child's first
-  message, a report, a job). The user can set a cap. An item that needs another item merged first, or would likely
-  change the same files (judged from the request until that child's plan lands), waits for that child's merge.
+  message, a report, a job). The user can set a cap. After the intent check above, an item that needs another item
+  merged first, or would likely change the same files (judged from the request until that child's plan lands), waits
+  for that child's merge.
 - Hands out what the children share, one child at a time each: one turn for all heavy GitHub workflows (a long
   end-to-end, VM or macOS run that devcrew starts), since the children share the account's runners; and each test
   machine or device (another computer, a phone, a VM). Requests wait in the order they came. The holder gives it back
@@ -528,6 +558,19 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
   shared test machine or device, it
   asks the orchestrator and waits for the go; it gives it back when that run ends. A run the tester could not find
   keeps the turn until the rerun tester finds it or reports it missing. Local testers and the PR's own CI need no go.
+- **A change of item** from the orchestrator: answer "changing" or, when it has already merged, "merged <SHA>". Stop the
+  agents whose tasks it voids or changes and the testers on the old head, and hold the merge until the new go. Update
+  the spec, then the plan through a fresh `devcrew-planner` whose brief lists the landed tasks and asks for revert tasks
+  for those that no longer fit; send both for a go, and on the go commit them on top of the branch (never rewrite a
+  pushed commit). Tasks it does not touch keep running. After the go, phase 3 runs the new tasks, and a branch already
+  past phase 3 runs phases 4 to 6 again on the new head (a fresh final review, testers again). A small item's change
+  goes back through the 3 to 5 lines, or steps up when it stops fitting. A change that leaves nothing to build: tell the
+  orchestrator, which drops the item: the child stops as a replaced one does, and the orchestrator cleans it up at once.
+- **Told to hold** (the orchestrator weighs replacing the item): answer "held" or "merged <SHA>"; start no new task
+  and do not merge; running agents finish and land. Neither the 30-minute job nor the go on the plan lifts it; only
+  the orchestrator's next word does.
+- **Replaced:** it stays stopped whatever wakes it (a job, a message, a usage-limit reset, a fresh session); its
+  30-minute job is deleted, and only the orchestrator's "resume" restarts it, through **Resuming**.
 - **Resuming** (any message or job that wakes it after a usage limit, a stop or a crash, or a fresh session in its
   worktree), before going on. A **cut-off** agent is one that is no longer running and never reported, or that ended on
   the usage limit; an agent still running is left alone.
@@ -576,6 +619,9 @@ orchestrator acts as their PM, and the two talk with `SendMessage`, never throug
 | "Ask the user to approve this spec or plan" | The orchestrator holds their requirements and approves it itself. |
 | "Small item, skip the red test" | Small skips the spec and the plan, never the red test. |
 | "It grew past small, but I'm nearly done" | Step up: tell the orchestrator and go back to phase 1 as a full item. |
+| "The new item replaces that child's, but it is nearly done; let it finish" | Stop it now. Work the user no longer wants still costs review, CI and a merge; its branch stays if they want it back. |
+| "The user's follow-up is a new item, start a child" | Compare it with every running item first; a change to one goes to that child. |
+| "Ask the user whether the new item replaces the old one" | Decide by the newer word and tell them in a line. Ask only when their words fit both readings, and tell that child to hold meanwhile. |
 | "This item is tiny, the orchestrator can just do it" | Every item gets its own child session. The orchestrator is only the PM. |
 | "Should I continue with the next task?" | The plan's go already said yes. Post a status line and continue. |
 | "CI is green, should I merge?" | Yes, when phase 6's conditions hold. Merge, then report. |
